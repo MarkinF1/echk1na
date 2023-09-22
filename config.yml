@@ -1,0 +1,10 @@
+dataset_path: /media/user/General/datasets/echkina/
+data_path: /media/user/General/datasets/echkina/AllPumps_Data.csv
+new_data_path: /media/user/General/datasets/echkina/new_AllPumps_Data.csv
+
+info_train_path: /media/user/General/datasets/echkina/Pumps_Struct_All_Trains.csv
+new_info_train_path: /media/user/General/datasets/echkina/new_Pumps_Struct_All_Trains.csv
+info_points_path: /media/user/General/datasets/echkina/Pumps_Struct_All_Points.csv
+new_info_points_path: /media/user/General/datasets/echkina/new_Pumps_Struct_All_Points.csv
+info_measures_path: /media/user/General/datasets/echkina/Pumps_Struct_All_Measures.csv
+new_info_measures_path: /media/user/General/datasets/echkina/new_Pumps_Struct_All_Measures.csv
