@@ -22,6 +22,7 @@ class MyDataset:
         with self.session() as session:
             return session.query(EchkinaTrain).all()
 
+
     def get_train_by_id(self, id_train: int | None) -> EchkinaTrain | None:
         if id_train is None:
             return
