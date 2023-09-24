@@ -1,4 +1,4 @@
-from sqlalchemy.orm import declarative_base, relation, relationship
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy import create_engine, Column, ForeignKey, Integer, DateTime, Float, String, Boolean
 
 Base = declarative_base()
@@ -51,4 +51,5 @@ class EchkinaData(Base):
     idMeasure = Column(Integer)
     date = Column(DateTime)
     value1 = Column(Float)
+    alarmtype = Column(Integer)
     # measure = relation("Measure")
