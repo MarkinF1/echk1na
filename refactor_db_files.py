@@ -6,7 +6,10 @@ from datetime import datetime
 from random import shuffle
 
 from sqlalchemy import DateTime
+from tqdm import tqdm
 from yaml import load, SafeLoader
+
+from main import MyDataset
 
 _CONFIG = namedtuple('Config', ("dataset_path",
                                 'data_path', 'new_data_path',
@@ -194,7 +197,7 @@ def add_type_of_class_data():
     dd = {}
     for measure_object in tqdm(dataset.get_measure_all()):
         point = dataset.get_point_by_id(id_point=measure_object.idPoint)
-        key = (point.idTrain, measure_object.type_, measure_object.rangeType,
+        key = (point.idTrain, measure_object.rangeType,
                measure_object.units, measure_object.param1, measure_object.param2)
 
         try:
@@ -225,6 +228,22 @@ def add_type_of_class_data():
                 item.alarmLevel4 = alarms[1]
                 dataset.update(item)
 
+def loader(self):
+    from main import MyDataset
+
+    dataset = MyDataset()
+    trains = dataset.get_train_by_id(9338)
+    shuffle(trains)
+    for train_object in trains:
+        values = ()
+        points = self.dataset.get_point_by_train(id_train=train_object.idTrain)
+        for point_object in points:
+            measures = self.dataset.get_measure_by_point(id_point=point_object.idPoint)
+            for measure_object in measures:
+                datas = self.dataset.get_data_by_measure(id_measure=measure_object.idMeasure)
+                for data_object in datas:
+                    values = values + data_object.value1
+
 
 class Trainer:
     def __init__(self, is_small_predict=True):
@@ -252,10 +271,50 @@ class Trainer:
     def train(self):
         pass
 
-async def main():
-    from cmc_hw.data_creater.loader.loader import get_points_by_trains
-    async for point in get_points_by_trains([12935]):
-        print(point, end='\n')
+
+def add_alarm_to_data():
+    dataset = MyDataset()
+
+    for data in tqdm(dataset.get_tmp_data_all()):
+        measure = dataset.get_measure_by_id(id_measure=data.idMeasure)
+        if measure is None:
+            dataset.remove_data_by_id(id_data=data.id)
+            continue
+
+        if measure.alarmLevel3 is not None or measure.alarmLevel4 is not None:
+            data.alarm = 0
+
+            if measure.alarmLevel3 is not None and data.value1 > measure.alarmLevel3:
+                data.alarm = 1
+
+            if measure.alarmLevel4 is not None and data.value1 > measure.alarmLevel4:
+                data.alarm = 2
+
+            dataset.update(data)
+
+
+def big_refactor():
+    """
+    {idTrain: [(idPoint, idMeasure, date, value1, alarmLevel3, alarmLevel4)...]}
+    :return:
+    """
+    dataset = MyDataset()
+    dictionary = {}
+    for train_object in tqdm([dataset.get_train_by_id(id_train=1613)]):
+        if train_object is None:
+            print("Странно, но train_object is None")
+        key = train_object.idTrain
+        dictionary[key] = []
+        for point_object in dataset.get_point_by_train(id_train=key):
+            id_point = point_object.idPoint
+            for measure_object in dataset.get_measure_by_point(id_point=id_point):
+                id_measure = measure_object.idMeasure
+                for tmp_object in dataset.get_tmp_by_id_measure(id_measure=id_measure):
+                    dictionary[key].append((id_point, id_measure, tmp_object.date,
+                                            tmp_object.value1, measure_object.alarmLevel3,
+                                            measure_object.alarmLevel4))
+        dictionary[key].sort(key=lambda x: x[2])
+        dictionary[key] = [dictionary[key]]
 
 
 if __name__ == "__main__":
@@ -275,4 +334,8 @@ if __name__ == "__main__":
     # delete_old_data_from_db()
     # delete_old_measures_from_db()
     # test()
-    add_type_of_class_data()
+    # trainer = Trainer()
+    # loader()
+    # add_type_of_class_data()
+    # add_alarm_to_data()
+    big_refactor()

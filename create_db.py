@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import create_engine, Column, ForeignKey, Integer, DateTime, Float, String, Boolean
+from sqlalchemy import create_engine, Column, ForeignKey, Integer, DateTime, Float, String, Boolean, Date, TIMESTAMP
 
 Base = declarative_base()
 
@@ -51,5 +51,16 @@ class EchkinaData(Base):
     idMeasure = Column(Integer)
     date = Column(DateTime)
     value1 = Column(Float)
-    alarmtype = Column(Integer)
+    alarm = Column(Integer)
     # measure = relation("Measure")
+
+
+class EchkinaTmpTable(Base):
+    __tablename__ = "tmp_one_more"
+
+    day = Column(Date)
+    id = Column(Integer, primary_key=True)
+    idMeasure = Column(Integer)
+    date = Column(TIMESTAMP)
+    value1 = Column(Float)
+    alarm = Column(Integer)

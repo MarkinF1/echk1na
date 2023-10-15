@@ -3,7 +3,7 @@ from typing import List, Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from create_db import EchkinaData, EchkinaTrain, EchkinaPoint, EchkinaMeasure
+from create_db import EchkinaData, EchkinaTrain, EchkinaPoint, EchkinaMeasure, EchkinaTmpTable
 
 
 class MyDataset:
@@ -97,7 +97,7 @@ class MyDataset:
     def get_data_all(self) -> Generator[None, EchkinaData, None]:
         with self.session() as session:
             count = session.query(EchkinaData).count()
-            for id_ in range(372151, count + 372152):
+            for id_ in range(767294, count + 767294):
                 object = session.query(EchkinaData).get(id_)
                 if object is not None:
                     yield object
@@ -122,12 +122,22 @@ class MyDataset:
 
         with self.session() as session:
             item = session.get(EchkinaData, id_data)
-            session.delete(item)
-            session.commit()
+            if item:
+                session.delete(item)
+                session.commit()
 
     def get_data_count(self):
         with self.session() as session:
             return session.query(EchkinaData).count()
+
+    # ----- Доп функции ------
+    def get_tmp_data_all(self):
+        with self.session() as session:
+            return session.query(EchkinaTmpTable).all()
+
+    def get_tmp_by_id_measure(self, id_measure: int) -> List[EchkinaTmpTable]:
+        with self.session() as session:
+            return session.query(EchkinaTmpTable).filter(EchkinaTmpTable.idMeasure == id_measure).all()
 
 
 def main():
