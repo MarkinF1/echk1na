@@ -1,4 +1,3 @@
-import json
 import time
 from copy import copy
 
@@ -14,6 +13,7 @@ from tqdm import tqdm
 from yaml import load, SafeLoader
 
 from main import MyDataset
+from yamlcreator import YamlCreator
 
 _CONFIG = namedtuple('Config', ("dataset_path",
                                 'data_path', 'new_data_path',
@@ -303,16 +303,20 @@ def big_refactor():
     :return:
     """
     dataset = MyDataset()
-    value = namedtuple('ValueObject',
-                       ("id_point", "direction", "unit", "id_measure", "day",
-                        "date", "value", "alarm3", "alarm4"))
+    v = namedtuple('ValueObject',
+                   ("id_point", "direction", "unit", "id_measure", "day",
+                    "date", "value", "alarm3", "alarm4"))
+
+    class value(v):
+        def asdict(self):
+            return self._asdict()
 
     if os.path.exists("get_all_value"):
         with open("get_all_value", "r") as file:
-            dictionary = json.load(file)
+            dictionary = load(file, Loader=SafeLoader)
     else:
         dictionary = {}
-        for train_object in tqdm(dataset.get_train_all()):
+        for train_object in tqdm(dataset.get_train_all()[:3]):
             """
             Проход по всем значениям путем train -> point -> measure -> value. 
             Составление массивов, состоящих их value, для каждого ключа id_train в dictionary
@@ -340,14 +344,18 @@ def big_refactor():
                         continue
 
                     for tmp_object in dataset.get_tmp_by_id_measure(id_measure=id_measure):
-                        dictionary[key].append(value(id_point=id_point, direction=point_object.direction,
-                                                     id_measure=id_measure, unit=measure_object.units, day=tmp_object.day,
-                                                     date=tmp_object.date, value=tmp_object.value1,
-                                                     alarm3=measure_object.alarmLevel3, alarm4=measure_object.alarmLevel4))
+                        value_ = value(id_point=id_point, direction=point_object.direction,
+                                       id_measure=id_measure, unit=measure_object.units, day=tmp_object.day,
+                                       date=tmp_object.date, value=tmp_object.value1,
+                                       alarm3=measure_object.alarmLevel3, alarm4=measure_object.alarmLevel4)
+                        dictionary[key].append(value_)
             dictionary[key].sort(key=lambda x: x[2])
         else:
-            with open("get_all_value", "w+") as file:
-                json.dump(dictionary, file)
+            yaml_file = YamlCreator()
+
+            yaml_file.add_parameter(name="dictionary", value=dictionary)
+            yaml_file.save(path="./", filename="get_all_value.yml")
+            del yaml_file
 
     if os.path.exists("cut_all_alarms"):
         with open("cut_all_alarms", "r") as file:
