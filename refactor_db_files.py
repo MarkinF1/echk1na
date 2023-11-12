@@ -206,18 +206,18 @@ def add_type_of_class_data():
 
         try:
             if measure_object.alarmLevel3:
-                dd[key][0][0] = measure_object.alarmLevel3
+                dd[key][0][0].add(measure_object.alarmLevel3)
             if measure_object.alarmLevel4:
-                dd[key][0][1] = measure_object.alarmLevel4
+                dd[key][0][1].add(measure_object.alarmLevel4)
 
             dd[key][1].append(measure_object.idMeasure)
-        except KeyError:
-            dd[key] = [[0, 0], []]
+        except (KeyError, TypeError):
+            dd[key] = [[set(), set()], []]
 
             if measure_object.alarmLevel3:
-                dd[key][0][0] = measure_object.alarmLevel3
+                dd[key][0][0].add(measure_object.alarmLevel3)
             if measure_object.alarmLevel4:
-                dd[key][0][1] = measure_object.alarmLevel4
+                dd[key][0][1].add(measure_object.alarmLevel4)
 
             dd[key][1].append(measure_object.idMeasure)
         except Exception as exp:
@@ -225,76 +225,32 @@ def add_type_of_class_data():
 
     for val in tqdm(dd.values()):
         alarms = val[0]
-        for idMesaure in val[1]:
+        if 0 in alarms[0]:
+            alarms[0].remove(0)
+        if 0 in alarms[1]:
+            alarms[1].remove(0)
+
+        alarm3 = None
+        alarm4 = None
+
+        if len(alarms[0]):
+            alarm3 = min(alarms[0])
+        if len(alarms[1]):
+            alarm4 = min(alarms[1])
+        if alarm3 and alarm4:
+            if alarm3 > alarm4:
+                alarm3, alarm4 = alarm4, alarm3
+
+        alarms = [alarm3, alarm4]
+
+        for id_mesaure in val[1]:
             if alarms[0] or alarms[1]:
-                item = dataset.get_measure_by_id(id_measure=idMesaure)
-                item.alarmLevel3 = alarms[0]
-                item.alarmLevel4 = alarms[1]
+                item = dataset.get_measure_by_id(id_measure=id_mesaure)
+                if not item.alarmLevel3:
+                    item.alarmLevel3 = alarms[0]
+                if not item.alarmLevel4:
+                    item.alarmLevel4 = alarms[1]
                 dataset.update(item)
-
-def loader(self):
-    from main import MyDataset
-
-    dataset = MyDataset()
-    trains = dataset.get_train_by_id(9338)
-    shuffle(trains)
-    for train_object in trains:
-        values = ()
-        points = self.dataset.get_point_by_train(id_train=train_object.idTrain)
-        for point_object in points:
-            measures = self.dataset.get_measure_by_point(id_point=point_object.idPoint)
-            for measure_object in measures:
-                datas = self.dataset.get_data_by_measure(id_measure=measure_object.idMeasure)
-                for data_object in datas:
-                    values = values + data_object.value1
-
-
-class Trainer:
-    def __init__(self, is_small_predict=True):
-        from main import MyDataset
-
-        self.days = 3 if is_small_predict else 14
-        self.count_values = 20 if is_small_predict else 40
-        self.dataset = MyDataset
-
-    def loader(self):
-        trains = self.dataset.get_train_all()
-        shuffle(trains)
-        for train_object in trains:
-            values = ()
-            points = self.dataset.get_point_by_train(id_train=train_object.idTrain)
-            for point_object in points:
-                measures = self.dataset.get_measure_by_point(id_point=point_object.idPoint)
-                for measure_object in measures:
-                    datas = self.dataset.get_data_by_measure(id_measure=measure_object.idMeasure)
-                    for data_object in datas:
-                        values = values + data_object.value1
-                        if len(values) == self.count_values:
-                            yield values + train_object.idTrain
-
-    def train(self):
-        pass
-
-
-def add_alarm_to_data():
-    dataset = MyDataset()
-
-    for data in tqdm(dataset.get_tmp_data_all()):
-        measure = dataset.get_measure_by_id(id_measure=data.idMeasure)
-        if measure is None:
-            dataset.remove_data_by_id(id_data=data.id)
-            continue
-
-        if measure.alarmLevel3 is not None or measure.alarmLevel4 is not None:
-            data.alarm = 0
-
-            if measure.alarmLevel3 is not None and data.value1 > measure.alarmLevel3:
-                data.alarm = 1
-
-            if measure.alarmLevel4 is not None and data.value1 > measure.alarmLevel4:
-                data.alarm = 2
-
-            dataset.update(data)
 
 
 def big_refactor():
@@ -303,20 +259,148 @@ def big_refactor():
     :return:
     """
     dataset = MyDataset()
-    v = namedtuple('ValueObject',
-                   ("id_point", "direction", "unit", "id_measure", "day",
-                    "date", "value", "alarm3", "alarm4"))
 
-    class value(v):
+    dictionary = {}
+
+    class ValueObject:
+        def __init__(self, id_train, id_point, direction, unit, id_measure, date, value, alarm3, alarm4):
+            self.id_train = id_train
+            self.id_point = id_point
+            self.direction = direction
+            self.unit = unit
+            self.id_measure = id_measure
+            self.date = date
+            self.value = value
+            self.alarm3 = alarm3
+            self.alarm4 = alarm4
+
         def asdict(self):
-            return self._asdict()
+            return {attr: self.__getattribute__(attr) for attr in self.__dict__}
 
-    if os.path.exists("get_all_value"):
-        with open("get_all_value", "r") as file:
-            dictionary = load(file, Loader=SafeLoader)
-    else:
+    class SmartContainer:
+        def __init__(self, direction: int, unit: int):
+            self.direction = direction
+            self.unit = unit
+
+            self.batches: List[List[ValueObject]] = []
+            self.current_add_batch: List[ValueObject] = []
+
+        def add(self, elem: ValueObject) -> None:
+            if self.current_add_batch:
+                delay = elem.date - self.current_add_batch[-1].date
+                if not 0 <= delay.days <= 5:
+                    self.flush()
+
+            self.current_add_batch.append(elem)
+
+        def flush(self) -> None:
+            self.batches.append(self.current_add_batch)
+            self.current_add_batch = []
+
+        def interpolate(self, num_days: int = 5, num_hours: int = 15):
+            """
+            Выполняет flush, а посел аппроксимацию где разница дней меньше num_days.
+            :param num_days: максимальное количество дней для аппроксимации.
+            :return:
+            """
+            self.flush()
+            for l in range(len(self.batches)):
+                batch = self.batches[l]
+                if len(batch) < 4:
+                    continue
+
+                batch.sort(key=lambda x: x.date)
+                date_arr = [time.mktime(value_object.date.timetuple()) for value_object in batch]
+                value_arr = [value_object.value for value_object in batch]
+
+                splain = interpolate.splrep(date_arr, value_arr)
+
+                new_batches = []
+                step_unix = 60 * 60 * num_hours
+                for i in range(1, len(batch)):
+                    value_object_old = batch[i - 1]
+                    value_object_next = batch[i]
+                    new_batches.append(value_object_old)
+                    t: timedelta = value_object_next.date - value_object_old.date
+                    if 0 < t.days < num_days:
+                        first_date_unix = time.mktime(value_object_old.date.timetuple())
+                        last_date_unix = time.mktime(value_object_next.date.timetuple())
+                        for i in range(int(first_date_unix + step_unix), int(last_date_unix), step_unix):
+                            new_value = copy(value_object_old)
+                            new_value.date = datetime.utcfromtimestamp(i)
+                            new_value.value = interpolate.splev(i, splain)
+                            new_batches.append(new_value)
+                new_batches.append(batch[-1])
+                self.batches[l] = new_batches
+
+        def delete_small_batches(self, num: int):
+            for i in range(len(self.batches) - 1, -1, -1):
+                if len(self.batches[i]) < num:
+                    self.batches.pop(i)
+
+        def __eq__(self, other):
+            return other.direction == self.direction and other.unit == self.unit
+
+    class ContainerCtrl:
+        def __init__(self):
+            self.containers = [SmartContainer(direction=i, unit=j) for i in range(1, 4) for j in range(0, 3)]
+
+        def add_trains(self, dictionary: dict) -> None:
+            for arrays in dictionary.values():
+                for arr in arrays:
+                    for value_object in arr:
+                        value_object: ValueObject
+                        container = self.get_container(direction=value_object.direction, unit=value_object.unit)
+                        if container:
+                            container.add(value_object)
+                    self.flush_all()
+
+        def get_dict(self):
+            dictionary = {}
+            for container in self.containers:
+                for batch in container.batches:
+                    if batch:
+                        try:
+                            dictionary[batch[0].id_train].append(batch)
+                        except KeyError:
+                            dictionary[batch[0].id_train] = [batch]
+            return dictionary
+
+        def get_container(self, direction: int, unit: int) -> Optional[SmartContainer]:
+            for container in self.containers:
+                if container.direction == direction and container.unit == unit:
+                    return container
+            else:
+                print(f"ContainerCtrl: я не нашел контейнер с direction = {direction}, unit = {unit}")
+                return None
+
+        def flush_all(self) -> None:
+            for container in self.containers:
+                container.flush()
+
+        def interpolate(self, num_days: int = 5) -> None:
+            """
+            Выполняет кубическую интерполяцию для всех SmartControllers.
+            :param num_days: количество дней разрыва, если больше, то не выолняется
+            """
+            for container in self.containers:
+                container.interpolate(num_days=num_days)
+
+        def save(self) -> None:
+            pass
+
+        def delete_small_batches(self, num_elements: int):
+            for container in self.containers:
+                container.delete_small_batches(num_elements)
+
+    def first_iteration():
+        nonlocal dictionary
+        # if os.path.exists("get_all_value.yml"):
+        #     with open("get_all_value.yml", "r") as file:
+        #         dictionary = load(file, Loader=SafeLoader)["dictionary"]
+        # else:
         dictionary = {}
-        for train_object in tqdm(dataset.get_train_all()[:3]):
+        for train_object in tqdm(dataset.get_train_all()[:5]):
             """
             Проход по всем значениям путем train -> point -> measure -> value. 
             Составление массивов, состоящих их value, для каждого ключа id_train в dictionary
@@ -343,151 +427,107 @@ def big_refactor():
                         print(f"idTrain = {key}\nidPoint = {id_point}\nidMeasure = {id_measure}")
                         continue
 
-                    for tmp_object in dataset.get_tmp_by_id_measure(id_measure=id_measure):
-                        value_ = value(id_point=id_point, direction=point_object.direction,
-                                       id_measure=id_measure, unit=measure_object.units, day=tmp_object.day,
-                                       date=tmp_object.date, value=tmp_object.value1,
-                                       alarm3=measure_object.alarmLevel3, alarm4=measure_object.alarmLevel4)
+                    for data_object in dataset.get_data_by_measure(id_measure=id_measure):
+                        value_ = ValueObject(id_train=key, id_point=id_point, direction=point_object.direction,
+                                             id_measure=id_measure, unit=measure_object.units,
+                                             date=data_object.date, value=data_object.value1,
+                                             alarm3=measure_object.alarmLevel3, alarm4=measure_object.alarmLevel4)
                         dictionary[key].append(value_)
-            dictionary[key].sort(key=lambda x: x[2])
-        else:
-            yaml_file = YamlCreator()
+            dictionary[key].sort(key=lambda x: x.date)
+            # else:
+            #     yaml_file = YamlCreator()
+            #
+            #     for lst in dictionary.values():
+            #         for i in range(len(lst)):
+            #             lst[i] = lst[i].asdict()
+            #
+            #     yaml_file.add_parameter(name="dictionary", value=dictionary)
+            #     yaml_file.save(path="./", filename="get_all_value.yml")
+            #     del yaml_file
+        #
+        # for lst in dictionary.values():
+        #     for i in range(len(lst)):
+        #         lst[i] = value(**lst[i])
 
-            yaml_file.add_parameter(name="dictionary", value=dictionary)
-            yaml_file.save(path="./", filename="get_all_value.yml")
-            del yaml_file
-
-    if os.path.exists("cut_all_alarms"):
-        with open("cut_all_alarms", "r") as file:
-            dictionary = json.load(file)
-    else:
+    def second_iteration():
+        nonlocal dictionary
+        # if os.path.exists("cut_all_alarms.yml"):
+        #     with open("cut_all_alarms.yml", "r") as file:
+        #         dictionary = load(file, Loader=SafeLoader)["dictionary"]
+        # else:
         for id_train in tqdm(dictionary):
             """
-            Проход по полученным массивам в поисках превышения alarm4 (поломка).
+            Проход по полученным массивам в поисках превышения alarm4 (поломка)
+            и в поиске сильного разрыва по дням.
             Если находим, то разделяем массив. Тем самым получается, что по 
             ключу id_train лежит массив из массивов.
             """
+            def split():
+                nonlocal arr, i
+                new_arr.append(arr[: i + 1])
+                arr = arr[i + 1:]
+                i = 0
+
+            dictionary[id_train].sort(key=lambda x: x.date)
             arr = dictionary[id_train]
             new_arr = []
             i = 0
             while i < len(arr):
-                value_object: value = arr[i]
+                value_object: ValueObject = arr[i]
+                if i < len(arr) - 1:
+                    next_object: ValueObject = arr[i + 1]
+                    if not 0 <= (next_object.date - value_object.date).days <= 5:
+                        if value_object.alarm4 and next_object.alarm4 \
+                            and value_object.value > value_object.alarm4 \
+                            and next_object.value > next_object.alarm4:
+                            split()
+                            continue
+                        if value_object.alarm3 and next_object.alarm3 \
+                            and value_object.value > value_object.alarm3 \
+                            and next_object.value > next_object.alarm3:
+                            split()
+
+
                 if value_object.alarm4 is None or value_object.value < value_object.alarm4:
                     i += 1
                     continue
 
-                new_arr.append(arr[: i + 1])
-                arr = arr[i + 1:]
-                i = 0
             new_arr.append(arr)
+
             dictionary[id_train] = new_arr
-        else:
-            with open("cut_all_alarms", "w+") as file:
-                json.dump(dictionary, file)
+            # else:
+            #     yaml_file = YamlCreator()
+            #
+            #     for lst in dictionary.values():
+            #         for i in range(len(lst)):
+            #             lst[i] = lst[i].asdict()
+            #
+            #     yaml_file.add_parameter(name="dictionary", value=dictionary)
+            #     yaml_file.save(path="./", filename="cut_all_alarms.yml")
+            #     del yaml_file
+        #
+        # for lst in dictionary.values():
+        #     for i in range(len(lst)):
+        #         lst[i] = value(**lst[i])
 
-    class SmartContainer:
-        def __init__(self, direction: int, unit: int):
-            self.direction = direction
-            self.unit = unit
-
-            self.batches: List[List[value]] = []
-            self.current_add_batch: List[value] = []
-
-        def add(self, elem: value) -> None:
-            self.current_add_batch.append(elem)
-
-        def flush(self) -> None:
-            self.batches.append(self.current_add_batch)
-            self.current_add_batch = []
-
-        def interpolate(self, num_days: int = 5, num_hours: int = 15):
-            """
-            Выполняет flush, а посел аппроксимацию где разница дней меньше num_days.
-            :param num_days: максимальное количество дней для аппроксимации.
-            :return:
-            """
-            self.flush()
-            for l in range(len(self.batches)):
-                batch = self.batches[l]
-                if not len(batch):
-                    continue
-
-                batch.sort(key=lambda x: x.date)
-                date_arr = [time.mktime(value_object.date.timetuple()) for value_object in batch]
-                value_arr = [value_object.value for value_object in batch]
-
-                splain = interpolate.splrep(date_arr, value_arr)
-
-                new_batches = []
-                step_unix = 60 * 60 * num_hours
-                for i in range(1, len(batch)):
-                    value_object_old = batch[i - 1]
-                    value_object_next = batch[i]
-                    new_batches.append(value_object_old)
-                    t: timedelta = value_object_next.date - value_object_old.date
-                    if 0 < t.days < num_days:
-                        first_date_unix = time.mktime(value_object_old.date.timetuple())
-                        last_date_unix = time.mktime(value_object_next.date.timetuple())
-                        for i in range(int(first_date_unix + step_unix), int(last_date_unix), step_unix):
-                            new_value = copy(value_object_old)
-                            new_value.date = datetime.utcfromtimestamp(i)
-                            new_value.day = datetime(year=new_value.date.year,
-                                                     month=new_value.date.month,
-                                                     day=new_value.date.day)
-                            new_value.value = interpolate.splev(i, splain)
-                            new_batches.append(new_value)
-                new_batches.append(batch[-1])
-                self.batches[l] = new_batches
-
-        def __eq__(self, other):
-            return other.direction == self.direction and other.unit == self.unit
-
-    class ContainerCtrl:
-        def __init__(self):
-            self.containers = [SmartContainer(direction=i, unit=j) for i in range(1, 4) for j in range(0, 3)]
-
-        def add_trains(self, dictionary: dict) -> None:
-            for arrays in dictionary.values():
-                for arr in arrays:
-                    for value_object in arr:
-                        value_object: value
-                        container = self.get_container(direction=value_object.direction, unit=value_object.unit)
-                        if container:
-                            container.add(value_object)
-                    self.flush_all()
-
-        def get_container(self, direction: int, unit: int) -> Optional[SmartContainer]:
-            for container in self.containers:
-                if container.direction == direction and container.unit == unit:
-                    return container
-            else:
-                print(f"ContainerCtrl: я не нашел контейнер с direction = {direction}, unit = {unit}")
-                return None
-
-        def flush_all(self) -> None:
-            for container in self.containers:
-                container.flush()
-
-        def interpolate(self, num_days: int = 5) -> None:
-            """
-            Выполняет кубическую интерполяцию для всех SmartControllers.
-            :param num_days: количество дней разрыва, если больше, то не выолняется
-            """
-            for container in self.containers:
-                container.interpolate(num_days=num_days)
-
-        def save(self) -> None:
-            pass
-
-    if os.path.exists("get_controller"):
-        with open("get_controller") as file:
-            controller = json.load(file)
-    else:
+    def third_iteration():
+        """
+        Интерполяция по каждому батчу
+        :return:
+        """
+        nonlocal dictionary
         controller = ContainerCtrl()
         controller.add_trains(dictionary=dictionary)
         controller.interpolate()
-        with open("get_controller", "w+") as file:
-            json.dump(controller, file)
+        controller.delete_small_batches(num_elements=30)
+        dictionary = controller.get_dict()
+        for value in dictionary.values():
+            value.sort(key=lambda x: x[0].date)
+        cd = ContainerCtrl()
+
+    first_iteration()
+    second_iteration()
+    third_iteration()
 
 
 if __name__ == "__main__":

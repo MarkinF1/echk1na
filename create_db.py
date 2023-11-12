@@ -51,8 +51,6 @@ class EchkinaData(Base):
     idMeasure = Column(Integer)
     date = Column(DateTime)
     value1 = Column(Float)
-    alarm = Column(Integer)
-    # measure = relation("Measure")
 
 
 class EchkinaTmpTable(Base):
