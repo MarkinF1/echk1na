@@ -62,3 +62,19 @@ class EchkinaTmpTable(Base):
     date = Column(TIMESTAMP)
     value1 = Column(Float)
     alarm = Column(Integer)
+
+
+class EchkinaReadyTable(Base):
+    __tablename__   = "ready_data"
+
+    id              = Column(Integer, primary_key=True, server_default='uuid_generate_v4()')
+    id_train        = Column(Integer, nullable=False)
+    id_point        = Column(Integer, nullable=False)
+    id_measure      = Column(Integer, nullable=False)
+    direction       = Column(Integer)
+    unit            = Column(Integer)
+    date            = Column(TIMESTAMP, nullable=False)
+    value           = Column(Float, nullable=False)
+    alarm3          = Column(Float)
+    alarm4          = Column(Float)
+    arr_idx         = Column(Integer, nullable=False)
