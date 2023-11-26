@@ -525,7 +525,7 @@ def big_refactor():
         nonlocal dictionary
 
         direct_unit = [(i, l) for i in range(1, 4) for l in range(0, 3)]
-        for key in dictionary:
+        for key in tqdm(dictionary):
             for k in range(len(dictionary[key])):
                 batch = dictionary[key][k]
                 if len(batch) < 4:
@@ -571,7 +571,6 @@ def big_refactor():
                     obj = EchkinaReadyTable(**d)
                     dataset.save(obj)
                 i += 1
-
 
     first_iteration()
     second_iteration()
