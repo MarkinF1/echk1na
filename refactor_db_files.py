@@ -13,8 +13,8 @@ from typing import Optional, List
 from tqdm import tqdm
 from yaml import load, SafeLoader
 
-from create_db import EchkinaReadyTable
-from main import MyDataset
+from db_classes import EchkinaReadyTable
+from db_connection import DataBase
 from yamlcreator import YamlCreator
 
 _CONFIG = namedtuple('Config', ("dataset_path",
@@ -62,7 +62,7 @@ def xlsx2csv():
 
 
 def push_data_to_db():
-    from create_db import EchkinaTrain, EchkinaPoint, EchkinaMeasure, EchkinaData, engine
+    from db_classes import EchkinaTrain, EchkinaPoint, EchkinaMeasure, EchkinaData, engine
     from sqlalchemy.orm import Session
     from sqlalchemy.exc import IntegrityError
 
@@ -176,9 +176,9 @@ def push_data_to_db():
 
 
 def delete_old_data_from_db():
-    from main import MyDataset
+    from db_connection import DataBase
 
-    dataset = MyDataset()
+    dataset = DataBase()
     for data_object in dataset.get_data_all():
         d = data_object.date
         if d.year < 2020:
@@ -186,20 +186,20 @@ def delete_old_data_from_db():
 
 
 def delete_old_measures_from_db():
-    from main import MyDataset
+    from db_connection import DataBase
     from tqdm import tqdm
 
-    dataset = MyDataset()
+    dataset = DataBase()
     for measure in tqdm(dataset.get_measure_all()):
         if not dataset.get_data_by_measure(measure.idMeasure):
             dataset.remove_measure_by_id(id_measure=measure.idMeasure)
 
 
 def add_type_of_class_data():
-    from main import MyDataset
+    from db_connection import DataBase
     from tqdm import tqdm
 
-    dataset = MyDataset()
+    dataset = DataBase()
     dd = {}
     for measure_object in tqdm(dataset.get_measure_all()):
         point = dataset.get_point_by_id(id_point=measure_object.idPoint)
@@ -260,7 +260,7 @@ def big_refactor():
     {id_train: [[ValueObject, ValueObject, ...], [ValueObject, ValueObject, ...], [ValueObject, ValueObject, ...] ...]}
     :return:
     """
-    dataset = MyDataset()
+    dataset = DataBase()
 
     dictionary = {}
 
