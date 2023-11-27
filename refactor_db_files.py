@@ -1,5 +1,6 @@
 import time
 from copy import copy
+import numpy as np
 
 from scipy import interpolate
 import os
@@ -76,7 +77,7 @@ def push_data_to_db():
     data = True
 
     if train:
-        columns = ["idTrain", "name", "description"]
+        columns = ["id_train", "name", "description"]
         types = [int, str, str]
         with open(os.path.join(CONFIG.dataset_path, CONFIG.new_info_train_path), 'r') as train_file:
             train_file.readline()
@@ -101,7 +102,7 @@ def push_data_to_db():
                 line = train_file.readline()
 
     if points:
-        columns = ["idTrain", "idPoint", "name", "description", "direction", "controllParametrType"]
+        columns = ["id_train", "idPoint", "name", "description", "direction", "controllParametrType"]
         types = [int, int, str, str, int, int]
         with open(os.path.join(CONFIG.dataset_path, CONFIG.new_info_points_path), 'r') as points_file:
             points_file.readline()
@@ -202,7 +203,7 @@ def add_type_of_class_data():
     dd = {}
     for measure_object in tqdm(dataset.get_measure_all()):
         point = dataset.get_point_by_id(id_point=measure_object.idPoint)
-        key = (point.idTrain, measure_object.rangeType,
+        key = (point.id_train, measure_object.rangeType,
                measure_object.units, measure_object.param1, measure_object.param2)
 
         try:
@@ -256,7 +257,7 @@ def add_type_of_class_data():
 
 def big_refactor():
     """
-    {idTrain: [[ValueObject, ValueObject, ...], [ValueObject, ValueObject, ...], [ValueObject, ValueObject, ...] ...]}
+    {id_train: [[ValueObject, ValueObject, ...], [ValueObject, ValueObject, ...], [ValueObject, ValueObject, ...] ...]}
     :return:
     """
     dataset = MyDataset()
@@ -264,7 +265,8 @@ def big_refactor():
     dictionary = {}
 
     class ValueObject:
-        def __init__(self, id_train, id_point, direction, unit, id_measure, date, value, alarm3, alarm4):
+        def __init__(self, id_train, id_point, direction, unit, id_measure,
+                     date, value, alarm3, alarm4, param1, param2):
             self.id_train = id_train
             self.id_point = id_point
             self.direction = direction
@@ -274,6 +276,8 @@ def big_refactor():
             self.value = value
             self.alarm3 = alarm3
             self.alarm4 = alarm4
+            self.param1 = param1
+            self.param2 = param2
 
         def asdict(self):
             return {attr: self.__getattribute__(attr) for attr in self.__dict__}
@@ -398,69 +402,55 @@ def big_refactor():
     def first_iteration():
         """
         Загрузка всех элементов в словарь,
-        ключ - idTrain, значение - набор необходимых характеристик.
+        ключ - id_train, значение - набор необходимых характеристик.
         """
         nonlocal dictionary
-        # if os.path.exists("get_all_value.yml"):
-        #     with open("get_all_value.yml", "r") as file:
-        #         dictionary = load(file, Loader=SafeLoader)["dictionary"]
-        # else:
+
+        print("\nЗагрузка данных в словарь")
         dictionary = {}
         for train_object in tqdm(dataset.get_train_all()):
             """
             Проход по всем значениям путем train -> point -> measure -> value. 
             Составление массивов, состоящих их value, для каждого ключа id_train в dictionary
             """
-
+            # gf += 1
+            # if gf == 100:
+            #     break
             if train_object is None:
                 print("Странно, но train_object is None")
                 continue
-            key = train_object.idTrain
-            dictionary[key] = []
+            key = train_object.id_train
+            dictionary[key] = {}
             for point_object in dataset.get_point_by_train(id_train=key):
                 if point_object is None:
                     print("Странно, но point_object is None")
                     continue
-                id_point = point_object.idPoint
+                id_point = point_object.id_point
+                dictionary[key][id_point] = []
                 for measure_object in dataset.get_measure_by_point(id_point=id_point):
                     if measure_object is None:
                         print("Странно, но measure_object is None")
                         continue
-                    id_measure = measure_object.idMeasure
+                    id_measure = measure_object.id_measure
 
                     if measure_object.units not in [0, 1, 2]:
                         print(f"Странно, units = {measure_object.units}!")
-                        print(f"idTrain = {key}\nidPoint = {id_point}\nidMeasure = {id_measure}")
+                        print(f"id_train = {key}\nidPoint = {id_point}\nidMeasure = {id_measure}")
                         continue
 
                     for data_object in dataset.get_data_by_measure(id_measure=id_measure):
                         value_ = ValueObject(id_train=key, id_point=id_point, direction=point_object.direction,
                                              id_measure=id_measure, unit=measure_object.units,
-                                             date=data_object.date, value=data_object.value1,
-                                             alarm3=measure_object.alarmLevel3, alarm4=measure_object.alarmLevel4)
-                        dictionary[key].append(value_)
-            dictionary[key].sort(key=lambda x: x.date)
-            # else:
-            #     yaml_file = YamlCreator()
-            #
-            #     for lst in dictionary.values():
-            #         for i in range(len(lst)):
-            #             lst[i] = lst[i].asdict()
-            #
-            #     yaml_file.add_parameter(name="dictionary", value=dictionary)
-            #     yaml_file.save(path="./", filename="get_all_value.yml")
-            #     del yaml_file
-        #
-        # for lst in dictionary.values():
-        #     for i in range(len(lst)):
-        #         lst[i] = value(**lst[i])
+                                             date=data_object.measure_date, value=data_object.value1,
+                                             alarm3=measure_object.alarm_level3, alarm4=measure_object.alarm_level4,
+                                             param1=measure_object.param1, param2=measure_object.param2)
+                        dictionary[key][id_point].append(value_)
+                dictionary[key][id_point].sort(key=lambda x: x.date)
 
     def second_iteration():
         nonlocal dictionary
-        # if os.path.exists("cut_all_alarms.yml"):
-        #     with open("cut_all_alarms.yml", "r") as file:
-        #         dictionary = load(file, Loader=SafeLoader)["dictionary"]
-        # else:
+
+        print("\nРазделение батчей по alarm3 и alarm4")
         for id_train in tqdm(dictionary):
             """
             Проход по полученным массивам в поисках превышения alarm4 (поломка)
@@ -468,41 +458,41 @@ def big_refactor():
             Если находим, то разделяем массив. Тем самым получается, что по 
             ключу id_train лежит массив из массивов.
             """
-            def split():
-                nonlocal arr, i, new_arr
-                new_arr.append(arr[: i + 1])
-                arr = arr[i + 1:]
+            for id_point in dictionary[id_train]:
+                def split():
+                    nonlocal arr, i, new_arr
+                    new_arr.append(arr[: i + 1])
+                    arr = arr[i + 1:]
+                    i = 0
+
+                arr = dictionary[id_train][id_point]
+                new_arr = []
                 i = 0
+                while i < len(arr):
+                    value_object: ValueObject = arr[i]
+                    if i < len(arr) - 1:
+                        next_object: ValueObject = arr[i + 1]
 
-            dictionary[id_train].sort(key=lambda x: x.date)
-            arr = dictionary[id_train]
-            new_arr = []
-            i = 0
-            while i < len(arr):
-                value_object: ValueObject = arr[i]
-                if i < len(arr) - 1:
-                    next_object: ValueObject = arr[i + 1]
+                        # Если происходит превышение по алармам4, то делаем сплит
+                        if value_object.alarm4 and next_object.alarm4 \
+                                and (
+                                value_object.value > value_object.alarm4 or next_object.value > next_object.alarm4):
+                            split()
 
-                    # Если происходит превышение по алармам4, то делаем сплит
-                    if value_object.alarm4 and next_object.alarm4 \
-                            and (
-                            value_object.value > value_object.alarm4 or next_object.value > next_object.alarm4):
-                        split()
-
-                    # Если происходит превышение по алармам3, то делаем сплит
-                    elif value_object.alarm3 and next_object.alarm3 \
-                            and (
-                            value_object.value > value_object.alarm3 or next_object.value > next_object.alarm3):
-                        split()
-                    # elif not 0 <= (next_object.date - value_object.date).days <= 5:
+                        # Если происходит превышение по алармам3, то делаем сплит
+                        elif value_object.alarm3 and next_object.alarm3 \
+                                and (
+                                value_object.value > value_object.alarm3 or next_object.value > next_object.alarm3):
+                            split()
+                        # elif not 0 <= (next_object.date - value_object.date).days <= 5:
+                        else:
+                            i += 1
                     else:
-                        i += 1
-                else:
-                    break
+                        break
 
-            new_arr.append(arr)
+                new_arr.append(arr)
 
-            dictionary[id_train] = new_arr
+                dictionary[id_train][id_point] = new_arr
             # else:
             #     yaml_file = YamlCreator()
             #
@@ -522,81 +512,144 @@ def big_refactor():
         """
         Интерполяция по каждому батчу
         """
+        import matplotlib.pyplot as plt
+
         nonlocal dictionary
 
+        print("\nДобавление сплайнов")
         direct_unit = [(i, l) for i in range(1, 4) for l in range(0, 3)]
-        for key in dictionary:
-            for k in range(len(dictionary[key])):
-                batch = dictionary[key][k]
-                if len(batch) < 4:
-                    continue
-
-                for direction, unit in direct_unit:
-                    batch.sort(key=lambda x: x.date)
-                    date_arr = [time.mktime(value_object.date.timetuple()) for value_object in batch
-                                if value_object.direction == direction and value_object.unit == unit]
-                    value_arr = [value_object.value for value_object in batch
-                                 if value_object.direction == direction and value_object.unit == unit]
-
-                    if len(date_arr) < 4:
+        for id_train in tqdm(dictionary):
+            for id_point in dictionary[id_train]:
+                for k in range(len(dictionary[id_train][id_point])):
+                    batch = dictionary[id_train][id_point][k]
+                    if len(batch) < 4:
                         continue
 
-                    splain = interpolate.splrep(date_arr, value_arr)
+                    for direction, unit in direct_unit:
+                        same_batch = [value_object for value_object in batch
+                                      if value_object.direction == direction and value_object.unit == unit]
+                        if not same_batch:
+                            continue
 
-                    new_batches = []
-                    step_unix = 60 * 60 * 15  # 15 часов
-                    for i in range(1, len(batch)):
-                        value_object_old = batch[i - 1]
-                        value_object_next = batch[i]
-                        new_batches.append(value_object_old)
-                        t: timedelta = value_object_next.date - value_object_old.date
-                        if 0 < t.days < 5:
-                            first_date_unix = time.mktime(value_object_old.date.timetuple())
-                            last_date_unix = time.mktime(value_object_next.date.timetuple())
-                            for i in range(int(first_date_unix + step_unix), int(last_date_unix), step_unix):
-                                new_value = copy(value_object_old)
-                                new_value.date = datetime.utcfromtimestamp(i)
-                                new_value.value = interpolate.splev(i, splain)
-                                new_batches.append(new_value)
-                    new_batches.append(batch[-1])
-                    dictionary[key][k] = new_batches
-        i = 1
-        keys = list(dictionary.keys())
-        keys.sort()
-        for key in keys:
-            for arr in dictionary[key]:
-                for value in arr:
-                    d = value.asdict()
-                    d['arr_idx'] = i
-                    obj = EchkinaReadyTable(**d)
-                    dataset.save(obj)
-                i += 1
+                        params = set((val.param1, val.param2) for val in same_batch)
+                        for params_ in params:
+                            bbatch = [val for val in same_batch
+                                      if val.param1 == params_[0] and val.param2 == params_[1]]
+                            date_arr = [time.mktime(value_object.date.timetuple()) for value_object in bbatch]
+                            value_arr = [value_object.value for value_object in bbatch]
 
+                            if len(date_arr) < 4:
+                                continue
+
+                            new_batches = []
+                            step_unix = 60 * 60 * 15  # 15 часов
+                            for i in range(1, len(bbatch)):
+                                value_object_old: ValueObject = bbatch[i - 1]
+                                value_object_next: ValueObject = bbatch[i]
+                                new_batches.append(value_object_old)
+                                t: timedelta = value_object_next.date - value_object_old.date
+                                if 0 < t.days < 5:
+                                    # start_idx = max(0, i - 2)
+                                    # end_idx = min(len(bbatch) - 1, i + 2)
+                                    # splain = interpolate.splrep(date_arr[start_idx: end_idx],
+                                    #                             value_arr[start_idx: end_idx])
+
+                                    first_date_unix = time.mktime(value_object_old.date.timetuple())
+                                    last_date_unix = time.mktime(value_object_next.date.timetuple())
+                                    # print(
+                                    #     f"time = {value_object_old.date}\n"
+                                    #     f"val = {interpolate.splev(time.mktime(value_object_old.date.timetuple()), splain)}")
+
+                                    for l in range(int(first_date_unix + step_unix), int(last_date_unix), step_unix):
+                                        new_value = copy(value_object_old)
+                                        new_value.date = datetime.utcfromtimestamp(l)
+                                        val = inter(x=date_arr, y=value_arr, x_val=l)
+                                        # val: np.ndarray = interpolate.splev(l, splain)
+                                        if type(val) is not float:
+                                            # print(f"type(val)= {type(val)}\nval = {val} is not float")
+                                            val = float(val)
+                                            a = min(value_object_old.value, value_object_next.value)
+                                            b = max(value_object_old.value, value_object_next.value)
+                                            if not a <= val <= b:
+                                                print("Опа, хуитааааааааааааааааа")
+                                                n = input()
+                                        # print(val)
+                                        new_value.value = val
+                                        new_batches.append(new_value)
+
+                            new_batches.append(batch[-1])
+                            batch.extend(new_batches)
+
+                            # fig, ax = plt.subplots()
+                            # ax.plot([vv.date for vv in new_batches], [vv.value for vv in new_batches])
+                            # plt.show()
+
+                    batch.sort(key=lambda x: x.date)
+
+        print("\nСохранение элементов в БД")
+        o = 1
+        id_trains = list(dictionary.keys())
+        id_trains.sort()
+
+        for id_train in tqdm(id_trains):
+            r = []
+            id_points = list(dictionary[id_train].keys())
+            for id_point in id_points:
+                for arr in dictionary[id_train][id_point]:
+                    for value in arr:
+                        r.append(value.asdict())
+
+            r.sort(key=lambda x: x["date"])
+            for i in range(1, len(r)):
+                r[i - 1]["arr_idx"] = o
+                # Если происходит превышение по алармам4, то делаем сплит
+                if (r[i - 1]["alarm4"] and r[i]["alarm4"] and
+                        (r[i - 1]["value"] > r[i - 1]["alarm4"] or r[i]["value"] > r[i]["alarm4"])):
+                    o += 1
+
+                # Если происходит превышение по алармам3, то делаем сплит
+                elif (r[i - 1]["alarm3"] and r[i]["alarm3"] and
+                      (r[i - 1]["value"] > r[i - 1]["alarm3"] or r[i]["value"] > r[i]["alarm3"])):
+                    o += 1
+                r[i - 1] = EchkinaReadyTable(**r[i - 1])
+
+            if r:
+                r[-1]["arr_idx"] = o
+                r[-1] = EchkinaReadyTable(**r[-1])
+
+            o += 1
+            r.sort(key=lambda x: (x.id_train, x.date))
+            for obj in r:
+                dataset.save(obj)
 
     first_iteration()
     second_iteration()
     third_iteration()
 
 
+def inter(x, y, x_val):
+    linear = interpolate.interp1d(x, y, kind="linear")
+    return linear(x_val)
+
+
+def ddd():
+    x = [1637278672.0, 1637367828.0, 1637656361.0, 1637656366.0]
+    val = [10.79915, 9.019785, 13.73455, 13.63186]
+    target = 1637421828.0
+    splain = interpolate.splrep(x, val, s=1)
+    print(interpolate.splev(target, splain))
+    # Полиномиальная интерполяция 351.10036413727255
+    poly = interpolate.KroghInterpolator(x, val)
+    print(poly(target))
+    # "Кусочно-линейная интерполяция" 9.90217041172067
+    linear = interpolate.interp1d(x, val, kind="linear")
+    print(linear(target))
+    # "Интерполяция кубическим сплайном" 351.1003641372645
+    cubic = interpolate.interp1d(x, val, kind="cubic")
+    print(cubic(target))
+
+
+
 if __name__ == "__main__":
-    # xlsx2csv()
-    # asyncio.run(main())
-    # delete_columns_data(old_path=os.path.join(CONFIG.dataset_path, CONFIG.data_path),
-    #                     new_path=os.path.join(CONFIG.dataset_path, CONFIG.new_data_path))
-
-    # delete_duplicate_rows(tables=[(os.path.join(CONFIG.dataset_path, CONFIG.info_train_path),
-    #                               os.path.join(CONFIG.dataset_path, CONFIG.new_info_train_path)),
-    #                               (os.path.join(CONFIG.dataset_path, CONFIG.info_points_path),
-    #                               os.path.join(CONFIG.dataset_path, CONFIG.new_info_points_path)),
-    #                               (os.path.join(CONFIG.dataset_path, CONFIG.info_measures_path),
-    #                               os.path.join(CONFIG.dataset_path, CONFIG.new_info_measures_path))])
-
-    # push_data_to_db()
-    # delete_old_data_from_db()
-    # delete_old_measures_from_db()
-    # test()
-    # trainer = Trainer()
-    # loader()
-    # add_type_of_class_data()
-    # add_alarm_to_data()
     big_refactor()
+    # ddd()

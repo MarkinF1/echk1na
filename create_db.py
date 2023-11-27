@@ -5,52 +5,53 @@ Base = declarative_base()
 
 
 class EchkinaTrain(Base):
-    __tablename__ = "train"
+    __tablename__ = "train_6"
 
-    idTrain = Column(Integer, primary_key=True)
-    name = Column(String)
+    id_train = Column(Integer, primary_key=True)
+    train_name = Column(String)
     description = Column(String)
 
 
 class EchkinaPoint(Base):
-    __tablename__ = "points"
+    __tablename__ = "point_6"
 
-    idPoint = Column(Integer, primary_key=True)
-    idTrain = Column(Integer, ForeignKey("train.idTrain"))
-    name = Column(String)
+    id_train = Column(Integer, ForeignKey("train.idTrain"))
+    id_point = Column(Integer, primary_key=True)
+    point_name = Column(String)
     description = Column(String)
     direction = Column(Integer)
-    controllParametrType = Column(Integer)
+    controlled_parameter_type = Column(Integer)
     # train = relation("Train")
 
 
 class EchkinaMeasure(Base):
-    __tablename__ = "measures"
+    __tablename__ = "measure_6"
 
-    idMeasure = Column(Integer, primary_key=True)
-    idPoint = Column(Integer, ForeignKey("points.idPoint"))
-    name = Column(String)
+    id_point = Column(Integer, ForeignKey("points.idPoint"))
+    id_measure = Column(Integer, primary_key=True)
+    measure_name = Column(String)
     description = Column(String)
-    type_ = Column(Integer)
-    rangeType = Column(Integer)
+    measure_type = Column(Integer)
+    range_type = Column(Integer)
     units = Column(Integer)
     param1 = Column(Integer)
     param2 = Column(Integer)
     param3 = Column(Integer)
-    alarmType = Column(Boolean)
-    alarmLevel2 = Column(Float)
-    alarmLevel3 = Column(Float)
-    alarmLevel4 = Column(Float)
+    alarm_type = Column(Boolean)
+    alarm_level2 = Column(Float)
+    alarm_level3 = Column(Float)
+    alarm_level4 = Column(Float)
+    id_train = Column(Integer)
     # point = relation("Point")
 
 
 class EchkinaData(Base):
-    __tablename__ = "data"
+    __tablename__ = "data_6"
 
-    id = Column(Integer, primary_key=True)
-    idMeasure = Column(Integer)
-    date = Column(DateTime)
+    id_measure = Column(Integer, primary_key=True)
+    measure_date = Column(DateTime, primary_key=True)
     value1 = Column(Float)
+    value2 = Column(Float)
 
 
 class EchkinaTmpTable(Base):
@@ -77,4 +78,6 @@ class EchkinaReadyTable(Base):
     value           = Column(Float, nullable=False)
     alarm3          = Column(Float)
     alarm4          = Column(Float)
+    param1          = Column(Float)
+    param2          = Column(Float)
     arr_idx         = Column(Integer, nullable=False)

@@ -49,14 +49,14 @@ class MyDataset:
             return
 
         with self.session() as session:
-            session.delete(EchkinaTrain(idTrain=id_train))
+            session.delete(EchkinaTrain(id_train=id_train))
 
     def remove_train_by_name(self, name: str | None) -> None:
         if name is None:
             return
 
         with self.session() as session:
-            session.delete(EchkinaTrain(name=name))
+            session.delete(EchkinaTrain(train_name=name))
 
     # ------ Point -------
     def get_point_by_id(self, id_point: int | None) -> EchkinaPoint | None:
@@ -71,7 +71,7 @@ class MyDataset:
             return []
 
         with self.session() as session:
-            return session.query(EchkinaPoint).filter(EchkinaPoint.idTrain == id_train).all()
+            return session.query(EchkinaPoint).filter(EchkinaPoint.id_train == id_train).all()
 
     # ---- Measure ------
     def get_measure_by_id(self, id_measure: int) -> EchkinaMeasure | None:
@@ -86,7 +86,7 @@ class MyDataset:
             return []
 
         with self.session() as session:
-            return session.query(EchkinaMeasure).filter(EchkinaMeasure.idPoint == id_point).all()
+            return session.query(EchkinaMeasure).filter(EchkinaMeasure.id_point == id_point).all()
 
     def get_measure_all(self) -> List[EchkinaMeasure]:
         with self.session() as session:
@@ -122,7 +122,7 @@ class MyDataset:
             return []
 
         with self.session() as session:
-            return session.query(EchkinaData).filter(EchkinaData.idMeasure == id_measure).all()
+            return session.query(EchkinaData).filter(EchkinaData.id_measure == id_measure).all()
 
     def remove_data_by_id(self, id_data: int | None) -> None:
         if id_data is None:
@@ -159,11 +159,11 @@ class MyDataset:
 def main():
     dataset = MyDataset()
     dict_of_models = {}
-    for data_object in dataset.get_data_all():
-        try:
-            dict_of_models[data_object.idMeasure] += 1
-        except KeyError:
-            dict_of_models[data_object.idMeasure] = 1
+    # for data_object in dataset.get_data_all():
+        # try:
+        #     dict_of_models[data_object.id_measure] += 1
+        # except KeyError:
+        #     dict_of_models[data_object. easure] = 1
 
     print(f"len: {len(dict_of_models)}\ndict_of_models: {dict_of_models}")
 
