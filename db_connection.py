@@ -1,9 +1,11 @@
-from typing import List, Generator
+import datetime
+from typing import List, Generator, Tuple
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, and_
 from sqlalchemy.orm import Session
 
-from db_classes import EchkinaData, EchkinaTrain, EchkinaPoint, EchkinaMeasure, EchkinaTmpTable, EchkinaReadyTable
+from db_classes import EchkinaData, EchkinaTrain, EchkinaPoint, EchkinaMeasure, EchkinaTmpTable, EchkinaReadyTable, \
+    EchkinaReadyTableCrop
 
 
 class DataBase:
@@ -157,7 +159,38 @@ class DataBase:
 
     def get_ready_data_all_id(self) -> List[int]:
         with self.session() as session:
-            return session.query(EchkinaReadyTable.id).all()
+            output = [int(row[0]) for row in session.query(EchkinaReadyTable.id).all()]
+            return output
+
+    def get_ready_data_all_train(self) -> List[int]:
+        with self.session as session:
+            output = set(int(row[0]) for row in session.query(EchkinaReadyTable.id_train).all())
+            return sorted(list(output))
+
+    def get_ready_data_all_train_date_crop(self) -> List[EchkinaReadyTableCrop]:
+        with self.session() as session:
+            output = [EchkinaReadyTableCrop(**{"id_": row[0], "id_train": row[1], "date": row[2], "arr_idx": row[3]})
+                      for row in session.query(EchkinaReadyTable.id,
+                                               EchkinaReadyTable.id_train,
+                                               EchkinaReadyTable.date,
+                                               EchkinaReadyTable.arr_idx).all()]
+
+            return output
+
+    def get_ready_data_by_id_train_date(self, id_data: int) -> EchkinaReadyTableCrop | None:
+        with self.session() as session:
+            obj = session.query(EchkinaReadyTable).get(id_data)
+            if obj is None:
+                return None
+            return EchkinaReadyTableCrop(id_=obj.id, id_train=obj.id_train, date=obj.date, arr_idx=obj.arr_idx)
+
+    def get_ready_data_special(self, id_train: int, max_date: datetime.datetime, arr_idx: int):
+        with self.session() as session:
+            condition = and_(EchkinaReadyTable.id_train == id_train,
+                             EchkinaReadyTable.date <= max_date,
+                             EchkinaReadyTable.arr_idx == arr_idx)
+            result = session.query(EchkinaReadyTable).filter(condition).all()
+            return result
 
 
 def main():

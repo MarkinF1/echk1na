@@ -1,5 +1,7 @@
-from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import create_engine, Column, ForeignKey, Integer, DateTime, Float, String, Boolean, Date, TIMESTAMP
+import datetime
+
+from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, ForeignKey, Integer, DateTime, Float, String, Boolean, Date, TIMESTAMP
 
 Base = declarative_base()
 
@@ -81,3 +83,16 @@ class EchkinaReadyTable(Base):
     param1          = Column(Float)
     param2          = Column(Float)
     arr_idx         = Column(Integer, nullable=False)
+
+
+class EchkinaReadyTableCrop:
+    id_: int
+    id_train: int
+    date: datetime.datetime
+    arr_idx: int
+
+    def __init__(self, id_: int, id_train: int, date: datetime.datetime, arr_idx: int):
+        self.id_ = id_
+        self.id_train = id_train
+        self.date = date
+        self.arr_idx = arr_idx
