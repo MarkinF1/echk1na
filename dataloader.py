@@ -1,12 +1,12 @@
 import datetime
 import time
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import torch
 from torchvision import transforms
 from sklearn.model_selection import train_test_split
 
-from db_classes import EchkinaReadyTableCrop
+from db_classes import EchkinaReadyTableCrop, EchkinaReadyTable
 from db_connection import DataBase
 from supporting import nice_print
 
@@ -107,7 +107,10 @@ class DataLoader:
 
         return result
 
-    def get_by_unit_direction(self, unit, direction):
+    def get_by_unit_direction(self, unit, direction) -> Tuple[torch.tensor,
+                                                              torch.tensor,
+                                                              List[EchkinaReadyTable],
+                                                              EchkinaReadyTable, int, int]:
         self.set_unit_direction(unit, direction)
 
         if not self.is_unit_direction_valid():
@@ -129,14 +132,11 @@ class DataLoader:
             # for obj in objects[-self.get_len_batch():]:
             #     values[0].append(obj.value)
             #     values[1].append(time.mktime(obj.date.timetuple()))
-
-            vals = [obj.value for obj in objects[-self.get_len_batch():]]
-            values = [[], []]
-            for i, val in enumerate(vals):
-                if i % 2 == 0:
-                    values[0].append(val)
-                else:
-                    values[1].append(val)
+            objects = objects[-self.get_len_batch():]
+            values = [obj.value for obj in objects]
+            # values = [[], []]
+            # for i, val in enumerate(vals):
+            #     values[i % 2].append(val)
             # values = [values[:int(len(values) // 2)], values[int(len(values)) // 2:]]
             target = self.__database.get_ready_data_by_id(id_data=crop_obj.id_)
 
