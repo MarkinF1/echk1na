@@ -1,13 +1,17 @@
 import torch
 from typing import List
+
+from models.BaseModel import BaseModel
 from supporting import device, nice_print
 
 
-class FullyConnectedNN(torch.nn.Module):
+class FullyConnectedNN(BaseModel):
     """
     Полносвязная модель
     """
-    def __init__(self, input_size: int, num_of_layers: int = 5):
+    param_count = 2
+
+    def __init__(self, input_size: int, num_of_layers: int):
         super(FullyConnectedNN, self).__init__()
         self.num_of_layers = num_of_layers
         self.input_size = input_size
@@ -23,12 +27,13 @@ class FullyConnectedNN(torch.nn.Module):
         step = self.input_size ** (1 / (self.num_of_layers + 1))
         curr_size_input = self.input_size
         curr_size_output = int(self.input_size // step)
-        sizes = []
+        sizes = [[curr_size_input, curr_size_output]]
 
         while curr_size_output > step:
-            sizes.append([curr_size_input, curr_size_output])
             curr_size_input = curr_size_output
             curr_size_output = int(curr_size_output // step)
+            sizes.append([curr_size_input, curr_size_output])
+
         sizes.append([curr_size_output, 1])
 
         # Уменьшение количества слоев в случае
@@ -65,7 +70,7 @@ class FullyConnectedNN(torch.nn.Module):
 #        self.fc5 = torch.nn.Linear(self.hidden_size4, 1).to(device())
 
     def forward(self, x: torch.tensor, *args):
-        if args and type(args) is List[float]:
+        if args:
             params = torch.tensor(args, dtype=torch.float32)
             params = params.to(device())
             x = torch.concat([params, x])

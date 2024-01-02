@@ -1,12 +1,9 @@
-from typing import Union
-
-import yaml
-
-import wandb
 import os
-from time import time
-
+import yaml
+import wandb
 import pickle
+from time import time
+from typing import Union, Optional
 from argparse import ArgumentParser
 
 import torch
@@ -14,8 +11,8 @@ import torch.nn as nn
 import torch.optim as optim
 
 from dataloader import DataLoader
-from models.FullConnectedModel import FullyConnectedNN
 from models.LSTMModel import LSTMModel
+from models.FullConnectedModel import FullyConnectedNN
 from supporting import Args, nice_print, date2str, get_time, Config
 
 args: Args
@@ -28,28 +25,30 @@ def set_model_input_size(input_size):
         global config, existed_models
 
         try:
+            model_class = existed_models[config.model.tp]
             model_config = config.__getattribute__(config.model.tp)._asdict()
-            model_config["input_size"] = input_size
-            model = existed_models[config.model.tp](**model_config)
+            model_config["input_size"] = input_size + model_class.param_count
+            model = model_class(**model_config)
         except KeyError:
-            print(f"Error: модель {config.model.tp} не найдена в словаре.")
+            print(f"Error: модель {existed_models[config.model.tp].__class__.__name__} не найдена в словаре.")
             return None
         return model
     return create_model
 
 
-def save_model(model, epoch: int, analyze: int, predict: int, unit: int, direction: int,
-               path: str = "./checkpoints/model_a%s_p%s_u%s_d%s_epoch%s.pth") -> None:
+def save_model(model, epoch: int, analyze: int, predict: int, unit: int, direction: int, path: Optional[str]) -> None:
+    if path is None:
+        path = os.path.join(config.main.checkpoint_save_dir, config.main.checkpoint_string)
+
     dirs = '/'.join(path.split('/')[:-1])
     os.makedirs(dirs, mode=0o777, exist_ok=True)
-    torch.save(model.state_dict(), path % (analyze, predict, unit, direction, epoch))
+    torch.save(model.state_dict(), path.format(analyze, predict, unit, direction, epoch))
 
 
 def train() -> None:
     global args, config
 
     os.makedirs(config.main.valid_objects_save_dir, mode=0o777, exist_ok=True)
-    #valid_save_path = f"./pickle_dumps_valid_train/dump_a{config.analyze_days}_p{config.prediction_days}_u%s_d%s.pl"
     valid_save_path = os.path.join(config.main.valid_objects_save_dir, config.main.valid_objects_string)
     valid_save_path = valid_save_path.format(args.analyze_days, args.prediction_days, "{0}", "{1}")
 
@@ -71,7 +70,7 @@ def train() -> None:
                    suffix="/\\", suffix2="\\/", num=17)
 
         # Определение модели, функции потерь и оптимизатора
-        nice_print(text=f"Создание модели {config.model.tp}", suffix='',  suffix2='-',
+        nice_print(text=f"Создание модели {existed_models[config.model.tp].__class__.__name__}", suffix='', suffix2='-',
                    off=config.settings.off_all_prints)
         model = create_model()
         if model is None:

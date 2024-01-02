@@ -2,6 +2,7 @@ import os
 import pickle
 from argparse import ArgumentParser
 
+from supporting import device
 
 dump = None
 args = None
@@ -59,7 +60,8 @@ def delete():
         save_dump(dump)
     except KeyError:
         print(f"Ключ {key} не найден, отключение.")
-    
+
+
 def pop():
     global args, dump
 
@@ -71,19 +73,41 @@ def pop():
     except KeyError:
         print(f"Ключ {key} не найден, отключение.")
 
+
+def set_device():
+    import torch
+    global args, dump
+
+    print("Device is", "cuda" if torch.cuda.is_available() else "cpu")
+    print("Print ok or not")
+    s = input()
+    while s != "ok" and s != "not":
+        print("Print ok or not")
+        s = input()
+
+    if s == "not":
+        return
+
+    for tensor in dump:
+        tensor[0].to(device())
+        tensor[1].to(device())
+
+    save_dump(dump)
+
+
 def main():
     global dump, args
     
-    
     functions = {"view": view,
                  "pop": pop,
-                 "delete": delete
-                }
+                 "delete": delete,
+                 "device": set_device,
+                 }
                 
     parser = ArgumentParser(description="Описание программы")
 
     parser.add_argument("-f", "--file", type=str, help="Файл для загрузки")
-    parser.add_argument("-c", "--command", type=str, choices=["view", "delete", "pop"], help="Команда для запуска")
+    parser.add_argument("-c", "--command", type=str, choices=functions.keys(), help="Команда для запуска")
     parser.add_argument("-u", "--unit", type=int, default=None, help="Unit для удаления")
     parser.add_argument("-d", "--direction", type=int, default=None, help="Direction для удаления")
     

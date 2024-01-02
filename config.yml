@@ -12,10 +12,7 @@ main:
   # Название файла с валидными объектами
   valid_objects_string: "dump_a{0}_p{1}_u{2}_d{3}.pl"
   # Отключить загрузку файлов валидных объектов для определенной пары (unit, direction)
-  off_load_pickle_for_unit_direction:
-    -
-      - 0
-      - 2
+  off_load_pickle_for_unit_direction: []
 
   # первый unit
   unit_start: 0
@@ -26,10 +23,7 @@ main:
   # последний direction
   direction_last: 3
   # отключить обработку определенной пары (unit, direction)
-  off_unit_direction:
-    -
-      - 0
-      - 1
+  off_unit_direction: []
 
 dataloader:
   test_size: 0.2 # 0.1
