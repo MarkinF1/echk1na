@@ -1,5 +1,4 @@
 import torch
-from typing import List
 
 from models.BaseModel import BaseModel
 from supporting import device, nice_print
@@ -14,7 +13,7 @@ class FullyConnectedNN(BaseModel):
     def __init__(self, input_size: int, num_of_layers: int):
         super(FullyConnectedNN, self).__init__()
         self.num_of_layers = num_of_layers
-        self.input_size = input_size
+        self.input_size = input_size + self.param_count
         self.linear_layers = torch.nn.ModuleList()
         self.__init()
 
@@ -58,24 +57,19 @@ class FullyConnectedNN(BaseModel):
 
         nice_print(text=f"INFO: FullyConnectedNN has {len(self.linear_layers)} layers.", suffix='-')
 
-#        self.hidden_size1 = 130
-#        self.hidden_size2 = 60
-#        self.hidden_size3 = 30
-#        self.hidden_size4 = 15
-
-#        self.fc1 = torch.nn.Linear(input_size + 2, self.hidden_size1).to(device())
-#        self.fc2 = torch.nn.Linear(self.hidden_size1, self.hidden_size2).to(device())
-#        self.fc3 = torch.nn.Linear(self.hidden_size2, self.hidden_size3).to(device())
-#        self.fc4 = torch.nn.Linear(self.hidden_size3, self.hidden_size4).to(device())
-#        self.fc5 = torch.nn.Linear(self.hidden_size4, 1).to(device())
-
     def forward(self, x: torch.tensor, *args):
-        if args:
-            params = torch.tensor(args, dtype=torch.float32)
-            params = params.to(device())
-            x = torch.concat([params, x])
+        if len(args) != self.param_count:
+            print(f"[ERROR] {self.__class__.__name__}.forward: не совпадает количество "
+                  f"дополнительных параметров в args.")
+            exit(1)
 
+        x = x.to(device())
+        if args:
+            params = torch.tensor(args, dtype=torch.float32).to(device())
+            x = torch.concat([params, x])
+        
         for layer in self.linear_layers[:-1]:
             x = torch.relu(layer(x))
+        
         x = self.linear_layers[-1](x)
         return x

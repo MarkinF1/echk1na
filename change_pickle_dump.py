@@ -13,7 +13,9 @@ def load_dump():
     
     if os.path.exists(args.file):
         with open(args.file, "rb") as file:
+            print("Загрузка дампа...", end='\r')
             dump = pickle.load(file)
+            print("Дамп загружен.", end='\r')
     else:
         print(f"Не нашел файл, отключение. NoSuchFileOrDirectory: {args.file}")
         exit(1)
@@ -79,25 +81,22 @@ def set_device():
     global args, dump
 
     print("Device is", "cuda" if torch.cuda.is_available() else "cpu")
-    print("Print ok or not")
+    print("Change device? [y/n]")
     s = input()
-    while s != "ok" and s != "not":
-        print("Print ok or not")
-        s = input()
-
-    if s == "not":
+    if s != "y" and s != "yes":
+        print("Change device canceled.")
         return
 
     for tensor in dump:
-        tensor[0].to(device())
-        tensor[1].to(device())
+        tensor[0] = tensor[0].to(device())
+        tensor[1] = tensor[1].to(device())
 
-    save_dump(dump)
+    save_dump(dump=dump)
 
 
 def main():
     global dump, args
-    
+
     functions = {"view": view,
                  "pop": pop,
                  "delete": delete,
@@ -110,7 +109,7 @@ def main():
     parser.add_argument("-c", "--command", type=str, choices=functions.keys(), help="Команда для запуска")
     parser.add_argument("-u", "--unit", type=int, default=None, help="Unit для удаления")
     parser.add_argument("-d", "--direction", type=int, default=None, help="Direction для удаления")
-    
+
     args = parser.parse_args()
     load_dump()
     

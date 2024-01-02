@@ -1,0 +1,79 @@
+---
+
+# Общие настройки
+main:
+  # Директория для сохранения чекпоинтов моделей
+  checkpoint_save_dir: "./checkpoints/"
+  # Название чекпоинтов
+  checkpoint_string: "model_a{0}_p{1}_u{2}_d{3}_epoch{4}.pth"
+
+  # Директория для сохранения валидных объектов
+  valid_objects_save_dir: "./pickle_dumps_valid_train/"
+  # Название файла с валидными объектами
+  valid_objects_string: "dump_a{0}_p{1}_u{2}_d{3}.pl"
+  # Отключить загрузку файлов валидных объектов для определенной пары (unit, direction)
+  off_load_pickle_for_unit_direction:
+    -
+      - 0
+      - 2
+    -
+      - 1
+      - 2
+    -
+      - 2
+      - 2
+
+  # первый unit
+  unit_start: 0
+  # последний unit
+  unit_last: 2
+  # первый direction
+  direction_start: 1
+  # последний direction
+  direction_last: 3
+  # отключить обработку определенной пары (unit, direction)
+  off_unit_direction: []
+
+dataloader:
+  test_size: 0.2 # 0.1
+  valid_size: 0.2
+  train_size: 0.7
+
+# Настройки модели
+model:
+  # Тип модели
+  tp: "lstm_model" # [lstm_model, fully_model]
+  # Оптимизатор
+  optimizer: Adam # [Adam, SGD] get from optim. ....
+  # Функция потерь
+  loss_function: MSELoss # [L1Loss, MSELoss, CrossEntropyLoss] get from nn. ...
+  # Максимальное количество эпох
+  epoch: 800
+  # Шаг обучения
+  lr: 0.00001
+
+# Настройки
+settings:
+  # Отключение второстепенных выводов
+  off_all_prints: False
+  # Отключение вывода времени
+  print_time: False
+  # Отключение вывода рандомного вывода предсказания
+  print_predict: False
+  # Вывод рандомного предсказания каждые...:
+  print_predict_step: 5000
+
+# Настройка wandb
+wandb:
+  # Название проекта
+  project: "echkina"
+  # Имя запуска
+  name: "echkina_model_unit_{0}_direction_{1}"
+
+# Настройка полносвязной модели
+fully_model:
+  num_of_layers: 5
+
+# Настройка модели временного ряда
+lstm_model:
+  hidden_size: 2000

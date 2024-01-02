@@ -3,7 +3,7 @@ import yaml
 import wandb
 import pickle
 from time import time
-from typing import Union, Optional
+from typing import Union
 from argparse import ArgumentParser
 
 import torch
@@ -25,23 +25,19 @@ def set_model_input_size(input_size):
         global config, existed_models
 
         try:
-            model_class = existed_models[config.model.tp]
             model_config = config.__getattribute__(config.model.tp)._asdict()
-            model_config["input_size"] = input_size + model_class.param_count
-            model = model_class(**model_config)
+            model_config["input_size"] = input_size
+            model = existed_models[config.model.tp](**model_config)
         except KeyError:
-            print(f"Error: модель {existed_models[config.model.tp].__class__.__name__} не найдена в словаре.")
+            print(f"Error: модель {config.model.tp} не найдена в словаре.")
             return None
         return model
     return create_model
 
 
-def save_model(model, epoch: int, analyze: int, predict: int, unit: int, direction: int, path: Optional[str]) -> None:
-    if path is None:
-        path = os.path.join(config.main.checkpoint_save_dir, config.main.checkpoint_string)
-
-    dirs = '/'.join(path.split('/')[:-1])
-    os.makedirs(dirs, mode=0o777, exist_ok=True)
+def save_model(model, epoch: int, analyze: int, predict: int, unit: int, direction: int) -> None:
+    os.makedirs(config.main.checkpoint_save_dir, mode=0o777, exist_ok=True)
+    path = os.path.join(config.main.checkpoint_save_dir, config.main.checkpoint_string)
     torch.save(model.state_dict(), path.format(analyze, predict, unit, direction, epoch))
 
 
@@ -99,7 +95,8 @@ def train() -> None:
                     valid_objects = pickle.load(file)
                 print("Дамп загружен.\n", end="\r")
             else:
-                nice_print(text=f"Дамп валидных объектов для unit {unit} и direction {direction} не найден. "
+                nice_print(text=f"Дамп валидных объектов для analyze {args.analyze_days}, "
+                                f"prediction {args.prediction_days}, unit {unit} и direction {direction} не найден. "
                                 f"Запускаюсь с пустым массивом валидных объектов.", suffix='', suffix2='-')
                 valid_objects = []
         else:
@@ -124,7 +121,7 @@ def train() -> None:
 
                 epoch_time = time()
 
-            if len(valid_objects):
+            if [unit, direction] not in config.main.off_load_pickle_for_unit_direction and len(valid_objects):
                 train_arr = valid_objects
             else:
                 train_arr = dataloader.get_by_unit_direction(unit, direction)
@@ -135,7 +132,9 @@ def train() -> None:
             model.train()
             first_iter_time = time()
             sum_loss = 0
+            count = 0
             for x, y, objects, target, i, num in train_arr:
+                count += 1
                 optimizer.zero_grad()
                 output = model(x, target.param1, target.param2)
 
@@ -149,7 +148,7 @@ def train() -> None:
                 wandb.log({"loss": loss.item()})
                 sum_loss += loss.item()
 
-                if not is_valid_arr:
+                if [unit, direction] not in config.main.off_load_pickle_for_unit_direction and not is_valid_arr:
                     valid_objects.append((x, y, objects, target, i, num))
 
                 curr_time = time()
@@ -157,12 +156,12 @@ def train() -> None:
                 print(f"[{i}/{num} {for_one_iter: .2f} it/s, "
                       f"Осталось времени: {get_time((num - i - 1) * for_one_iter)}]", end='\r')
 
-            if not epoch:
+            if not config.main.off_load_pickle_for_unit_direction and not epoch:
                 with open(valid_save_path.format(unit, direction), "wb") as file:
                     pickle.dump(valid_objects, file)
 
-            epoch_loss = sum_loss / len(valid_objects)
-            wandb.log({"epoch": epoch, "loss_epoch": epoch_loss})
+            epoch_loss = sum_loss / count
+            wandb.log({"loss_epoch": epoch_loss, "epoch": epoch})
 
             if best_loss is None or best_loss > epoch_loss:
                 nice_print(text=f"Best_loss: {best_loss} ----- Current_loss: {epoch_loss} "
