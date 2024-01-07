@@ -5,7 +5,7 @@ from models.BaseModel import BaseModel
 
 
 class LSTMModel(BaseModel):
-    def __init__(self, input_size: int, hidden_size: int, output_size: int):
+    def __init__(self, input_size: int, hidden_size: int):
         super(LSTMModel, self).__init__()
         self.hidden_size = hidden_size
 

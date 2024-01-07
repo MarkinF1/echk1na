@@ -9,7 +9,8 @@ from db_classes import EchkinaData, EchkinaTrain, EchkinaPoint, EchkinaMeasure, 
 
 
 class DataBase:
-    engine = create_engine('postgresql://postgres:postgres@localhost:5432/echkina')
+    def __init__(self, database: str = "echkina"):
+        self.engine = create_engine(f'postgresql://postgres:postgres@localhost:5432/{database}')
 
     def session(self):
         return Session(self.engine)
@@ -234,11 +235,12 @@ class DataBase:
             output.sort(key=lambda x: (x.arr_idx, x.date))
             return output
 
-    def get_ready_data_special(self, id_train: int,
-                               max_date: datetime.datetime, arr_idx: int) -> List[EchkinaReadyTable]:
+    def get_ready_data_special(self, id_train: int, max_date: datetime.datetime, min_date: datetime.datetime,
+                               arr_idx: int) -> List[EchkinaReadyTable]:
         with self.session() as session:
             condition = and_(EchkinaReadyTable.id_train == id_train,
                              EchkinaReadyTable.date <= max_date,
+                             EchkinaReadyTable.date >= min_date,
                              EchkinaReadyTable.arr_idx == arr_idx)
             result = session.query(EchkinaReadyTable).filter(condition).all()
             return result

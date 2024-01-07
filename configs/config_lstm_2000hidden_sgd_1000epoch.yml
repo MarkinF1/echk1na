@@ -51,6 +51,10 @@ model:
   epoch: 1000
   # Шаг обучения
   lr: 0.000001
+  # Путь для модели загрузки
+  checkpoint_save: []
+  # Начать с эпохи:
+  start_epoch: []
 
 # Настройки
 settings:

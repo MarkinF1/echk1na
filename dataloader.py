@@ -1,40 +1,71 @@
 import datetime
-from typing import List, Optional, Tuple
+import os.path
+import pickle
+from typing import List, Optional, Tuple, Dict
 
 import torch
+import tqdm
 from sklearn.model_selection import train_test_split
 
 from db_classes import EchkinaReadyTableCrop, EchkinaReadyTable
 from db_connection import DataBase
-from supporting import nice_print, device
+from supporting import nice_print, device, make_input_tensor, Config, database_name
 
 
 class DataLoader:
+    class ArrayTypes:
+        train = "train"
+        validate = "validate"
+        test = "test"
+
+    __instance = {}
+
     def __init__(self, count_predictions_days: int = 3, count_analyze_days: int = 10, count_directions: int = 3,
-                 count_units: int = 3):
-        self.__count_predictions_days: int = count_predictions_days
-        self.__count_analyze_days: int = count_analyze_days
+                 count_units: int = 3, database: str = database_name):
+        if database not in self.__instance:
+            self.__count_predictions_days = datetime.timedelta(count_predictions_days)
+            self.__count_analyze_days = datetime.timedelta(count_analyze_days)
 
-        self.__count_directions: int = count_directions
-        self.__count_units: int = count_units
+            self.__count_directions: int = count_directions
+            self.__count_units: int = count_units
 
-        self.__idx = 0
-        self.__count_points = 2
-        self.__is_train: bool = True
-        self.__current_unit: Optional[int] = None
-        self.__current_direction: Optional[int] = None
-        self.__test_arr: List[EchkinaReadyTableCrop] = []
-        self.__train_arr: List[EchkinaReadyTableCrop] = []
-        self.__current_arr: List[EchkinaReadyTableCrop] = []
+            self.__idx = 0
+            self.__count_points = 2
+            self.__current_array_type: str = self.ArrayTypes.train
+            self.__current_unit: Optional[int] = None
+            self.__current_direction: Optional[int] = None
+            self.__arrays: Dict[str, Tuple[EchkinaReadyTableCrop]] = {self.ArrayTypes.train: (),
+                                                                      self.ArrayTypes.validate: (),
+                                                                      self.ArrayTypes.test: ()}
 
-        self.__database = DataBase()
+            self.config = Config.getInstance()
+
+            self.__database = DataBase(database=database)
+            self.__instance[database] = self
+
+    @classmethod
+    def getInstance(cls, database: str):
+        try:
+            return cls.__instance[database]
+        except KeyError:
+            return None
 
     def get_current_unit_direction(self):
         return self.__current_unit, self.__current_direction
 
     def is_unit_direction_valid(self):
-        return (self.__current_unit in range(self.__count_units) and
-                self.__current_direction in range(1, self.__count_directions))
+        return (self.__current_unit in range(Config.getInstance().main.unit_start,
+                                             Config.getInstance().main.unit_last + 1)
+                and self.__current_direction in range(Config.getInstance().main.direction_start,
+                                                      Config.getInstance().main.direction_last + 1))
+
+    def __convert_days2count_values(self, days: int) -> int:
+        in_one_day = self.__count_directions * self.__count_units * self.__count_points
+        count = int(days * 1.5) * in_one_day
+        return count
+
+    def get_len_batch(self) -> int:
+        return self.__convert_days2count_values(self.__count_analyze_days.days)
 
     def set_unit_direction(self, unit: int, direction: int) -> None:
         nice_print(text=f"Инициализация DataLoader'a "
@@ -43,27 +74,71 @@ class DataLoader:
         self.__current_unit = unit
         self.__current_direction = direction
 
+        if not self.is_unit_direction_valid():
+            print(f"Error: Dataloader не валидный. Установите unit и direction с помощью метода set_unit_direction")
+            return
+
         arr = self.__database.get_ready_data_by_unit_direction_crop(unit=self.__current_unit,
                                                                     direction=self.__current_direction)
-        self.__train_arr, self.__test_arr = train_test_split(arr, test_size=0.2, random_state=25)
+        valid_arr = []
+        for elem in tqdm.tqdm(arr):
+            objects = self.__database.get_ready_data_special(id_train=elem.id_train,
+                                                             max_date=elem.date - self.__count_predictions_days,
+                                                             min_date=elem.date - self.__count_predictions_days
+                                                                                - self.__count_analyze_days
+                                                                                - datetime.timedelta(days=2),
+                                                             arr_idx=elem.arr_idx)
+            if self.get_len_batch() > len(objects):
+                continue
 
-        self.__current_arr = self.__train_arr if self.__is_train else self.__test_arr
+            objects = objects[-self.get_len_batch():]
+            values = [obj.value for obj in objects]
+            x = make_input_tensor(values)
 
-    def __valid_check(self, id_obj: int) -> bool:
-        obj = self.__database.get_ready_data_by_id(id_data=id_obj)
-        predict_days = datetime.timedelta(self.__count_predictions_days)
-        result = self.__database.get_ready_data_special(id_train=obj.id_train,
-                                                        max_date=obj.date - predict_days,
-                                                        arr_idx=obj.arr_idx)
-        return len(result) >= self.get_len_batch()
+            target = self.__database.get_ready_data_by_id(id_data=elem.id_)
+            y = torch.tensor([target.value], dtype=torch.float32).to(device())
 
-    def get_len_batch(self) -> int:
-        return self.__convert_days2count_values(self.__count_analyze_days)
+            valid_arr.append((x, y, target))
 
-    def __convert_days2count_values(self, days: int) -> int:
-        in_one_day = self.__count_directions * self.__count_units * self.__count_points
-        count = int(days * 1.5) * in_one_day
-        return count
+        self.__arrays[self.ArrayTypes.train], test_valid_arr = (
+            train_test_split(valid_arr,
+                             train_size=self.config.dataloader.train_size,
+                             random_state=self.config.dataloader.random_state)
+        )
+
+        test_size = self.config.dataloader.test_size / (1.0 - self.config.dataloader.train_size)
+        self.__arrays[self.ArrayTypes.validate], self.__arrays[self.ArrayTypes.test] = (
+            train_test_split(test_valid_arr,
+                             test_size=test_size,
+                             random_state=self.config.dataloader.random_state)
+        )
+
+        nice_print(text=f"Валидных объектов: {len(valid_arr)}/{len(arr)}",
+                   suffix='', suffix2='-')
+
+        nice_print(text=f"Тренировочных объектов: {len(self.__arrays[self.ArrayTypes.train])}/{len(valid_arr)}",
+                   suffix='', suffix2='-')
+
+        nice_print(text=f"Валидационных объектов: {len(self.__arrays[self.ArrayTypes.validate])}/{len(valid_arr)}",
+                   suffix='', suffix2='-')
+
+        nice_print(text=f"Тестовых объектов: {len(self.__arrays[self.ArrayTypes.test])}/{len(valid_arr)}",
+                   suffix='', suffix2='-')
+
+    def save_pickle(self):
+        path = os.path.join(Config.getInstance().main.valid_objects_save_dir,
+                            Config.getInstance().main.valid_objects_string)
+
+        with open(path.format(self.__count_analyze_days.days, self.__count_predictions_days.days,
+                              self.__current_unit, self.__current_direction), "wb") as file:
+            pickle.dump(self.__arrays, file)
+
+    def load_pickle(self, unit, direction, path):
+        self.__current_unit = unit
+        self.__current_direction = direction
+
+        with open(path.format(unit, direction), "rb") as file:
+            self.__arrays = pickle.load(file)
 
     def check_train_id_is_valid(self, id_train: int) -> List[datetime.date]:
         objects = self.__database.get_ready_data_by_train(id_train=id_train)
@@ -91,10 +166,10 @@ class DataLoader:
         result = []
         for date_period in dates:
             first_day = datetime.date(year=date_period[0].year, month=date_period[0].month, day=date_period[0].day)
-            first_day += datetime.timedelta(days=self.__count_analyze_days)
+            first_day += self.__count_analyze_days
 
             last_day = datetime.date(year=date_period[-1].year, month=date_period[-1].month, day=date_period[-1].day)
-            last_day += datetime.timedelta(days=self.__count_analyze_days)
+            last_day += self.__count_analyze_days
 
             current_day = first_day
             while current_day < last_day:
@@ -103,70 +178,38 @@ class DataLoader:
 
         return result
 
-    def get_by_unit_direction(self, unit, direction) -> Tuple[torch.tensor,
-                                                              torch.tensor,
-                                                              List[EchkinaReadyTable],
-                                                              EchkinaReadyTable, int, int]:
-        self.set_unit_direction(unit, direction)
+    def __iter__(self):
+        return self.__arrays[self.__current_array_type].__iter__()
 
-        if not self.is_unit_direction_valid():
-            print(f"Error: Dataloader не валидный. Установите unit и direction с помощью метода set_unit_direction")
-            return None, None
-
-        self.__idx = 0
-        while self.__idx < len(self.__current_arr):
-            crop_obj = self.__current_arr[self.__idx]
-            self.__idx += 1
-            predict_days = datetime.timedelta(days=self.__count_predictions_days)
-            objects = self.__database.get_ready_data_special(id_train=crop_obj.id_train,
-                                                             max_date=crop_obj.date - predict_days,
-                                                             arr_idx=crop_obj.arr_idx)
-            if self.get_len_batch() > len(objects):
-                continue
-
-            # values = [[], []]
-            # for obj in objects[-self.get_len_batch():]:
-            #     values[0].append(obj.value)
-            #     values[1].append(time.mktime(obj.date.timetuple()))
-            objects = objects[-self.get_len_batch():]
-            values = [obj.value for obj in objects]
-            # values = [[], []]
-            # for i, val in enumerate(vals):
-            #     values[i % 2].append(val)
-            # values = [values[:int(len(values) // 2)], values[int(len(values)) // 2:]]
-            target = self.__database.get_ready_data_by_id(id_data=crop_obj.id_)
-
-            x = torch.tensor(values, dtype=torch.float32)
-            mean = torch.mean(x)
-            std = torch.std(x)
-            x = (x - mean) / std
-
-            y = torch.tensor([target.value], dtype=torch.float32)
-
-            x = x.to(device())
-            y = y.to(device())
-
-            yield x, y, objects, target, self.__idx, len(self.__current_arr)
+    def __next__(self):
+        return self.__arrays[self.__current_array_type].__next__()
 
     def train(self) -> None:
         """
         Переводит DataLoader в train режим:
         меняет массив на тренировочный, обнуляет индексацию.
         """
-        if not self.__is_train:
-            self.__is_train = True
+        if self.__current_array_type != self.ArrayTypes.train:
+            self.__current_array_type = self.ArrayTypes.train
             self.__idx = 0
-            self.__current_arr = self.__train_arr
+
+    def validate(self) -> None:
+        """
+        Переводит DataLoader в validate режим:
+        меняет массив на валидационный, обнуляет индексацию.
+        """
+        if self.__current_array_type != self.ArrayTypes.validate:
+            self.__current_array_type = self.ArrayTypes.validate
+            self.__idx = 0
 
     def eval(self):
         """
         Переводит DataLoader в test режим:
         меняет массив на тестовый, обнуляет индексацию.
         """
-        if self.__is_train:
-            self.__is_train = False
+        if self.__current_array_type != self.ArrayTypes.test:
+            self.__current_array_type = self.ArrayTypes.test
             self.__idx = 0
-            self.__current_arr = self.__test_arr
 
 
 if __name__ == "__main__":
