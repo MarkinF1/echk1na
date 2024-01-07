@@ -67,7 +67,7 @@ settings:
 wandb:
   turn_on: True
   # Название проекта
-  project: "echkina"
+  project: "echkina_unit{0}_direction{1}"
   # Имя запуска
   name: "echkina_{0}_{1}_{2}_model_unit_{3}_direction_{4}"
 

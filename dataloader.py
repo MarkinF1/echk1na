@@ -77,6 +77,7 @@ class DataLoader:
             print(f"Error: Dataloader не валидный. Установите unit и direction с помощью метода set_unit_direction")
             return
 
+        del self.__arrays
         arr = self.__database.get_ready_data_by_unit_direction_crop(unit=self.__current_unit,
                                                                     direction=self.__current_direction)
         valid_arr = []

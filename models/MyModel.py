@@ -75,9 +75,12 @@ class MyChildModel:
         # Настройка вспомогательных параметров
         epoch_time = time()
         if self.config.wandb.turn_on:
+            model_type = self.config.model.tp
+            model_param_string = '_'.join(self.config.__getattribute__(model_type)._asdict().values())
             graphic_wandb = wandb.init(
-                          name=self.config.wandb.name.format(self.unit, self.direction),
-                          project=self.config.wandb.project,
+                          name=self.config.wandb.name.format(model_type, model_param_string,
+                                                             self.config.model.optimizer, self.unit, self.direction),
+                          project=self.config.wandb.project.format(self.unit, self.direction),
                           config={"epochs": self.config.model.epoch, "lr": self.config.model.lr})
 
         nice_print(text="Начинаю обучение.", suffix='*', off=self.config.settings.off_all_prints)
