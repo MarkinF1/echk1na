@@ -29,7 +29,6 @@ class DataLoader:
             self.__count_directions: int = count_directions
             self.__count_units: int = count_units
 
-            self.__idx = 0
             self.__count_points = 2
             self.__current_array_type: str = self.ArrayTypes.train
             self.__current_unit: Optional[int] = None
@@ -129,8 +128,10 @@ class DataLoader:
         path = os.path.join(Config.getInstance().main.valid_objects_save_dir,
                             Config.getInstance().main.valid_objects_string)
 
-        with open(path.format(self.__count_analyze_days.days, self.__count_predictions_days.days,
-                              self.__current_unit, self.__current_direction), "wb") as file:
+        with open(path.format(
+                self.config.dataloader.random_state, self.__count_analyze_days.days,
+                self.__count_predictions_days.days, self.__current_unit, self.__current_direction
+        ), "wb") as file:
             pickle.dump(self.__arrays, file)
 
     def load_pickle(self, unit, direction, path):
@@ -191,7 +192,6 @@ class DataLoader:
         """
         if self.__current_array_type != self.ArrayTypes.train:
             self.__current_array_type = self.ArrayTypes.train
-            self.__idx = 0
 
     def validate(self) -> None:
         """
@@ -200,7 +200,6 @@ class DataLoader:
         """
         if self.__current_array_type != self.ArrayTypes.validate:
             self.__current_array_type = self.ArrayTypes.validate
-            self.__idx = 0
 
     def eval(self):
         """
@@ -209,7 +208,6 @@ class DataLoader:
         """
         if self.__current_array_type != self.ArrayTypes.test:
             self.__current_array_type = self.ArrayTypes.test
-            self.__idx = 0
 
 
 if __name__ == "__main__":

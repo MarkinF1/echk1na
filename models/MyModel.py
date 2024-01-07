@@ -64,7 +64,8 @@ class MyChildModel:
 
     def train(self) -> None:
         valid_save_path = os.path.join(self.config.main.valid_objects_save_dir, self.config.main.valid_objects_string)
-        valid_save_path = valid_save_path.format(self.args.analyze_days, self.args.prediction_days, "{0}", "{1}")
+        valid_save_path = valid_save_path.format(self.config.dataloader.random_state, self.args.analyze_days,
+                                                 self.args.prediction_days, "{0}", "{1}")
 
         nice_print(text=f"ОБУЧЕНИЕ ДЛЯ UNIT: {self.unit}, DIRECTION: {self.direction}",
                    suffix="/\\", suffix2="\\/", num=17)
@@ -83,6 +84,7 @@ class MyChildModel:
         start_epoch = self.epoch
         for self.epoch in range(start_epoch, self.config.model.epoch):
             self.model.train()
+            train_arr.train()
 
             if self.config.settings.print_time:
                 epoch_duration = time() - epoch_time
@@ -126,7 +128,7 @@ class MyChildModel:
 
             self.validate()
 
-            if self.epoch % self.config.model.lr_step == (self.config.main.lr_step - 1):
+            if self.epoch % self.config.model.lr_step == (self.config.model.lr_step - 1):
                 for g in self.optim.param_groups:
                     g["lr"] *= self.config.model.lr_decay
 
@@ -142,16 +144,9 @@ class MyChildModel:
         dataloader.validate()
 
         with torch.no_grad():
-            if self.valid_validate_objects:
-                validate_arr = self.valid_validate_objects
-                is_valid = True
-            else:
-                validate_arr = dataloader
-                is_valid = False
-
             sum_loss = 0
             count = 0
-            for x, y, objects, target, i, num in validate_arr:
+            for i, (x, y, target) in enumerate(tqdm.tqdm(dataloader)):
                 count += 1
                 output = self.model(x, target.param1, target.param2)
                 loss = self.loss_fun(output, y)
@@ -160,11 +155,6 @@ class MyChildModel:
                     print(f"model.predict: {output}\ntarget:{y}\nloss: {loss.item()}")
 
                 sum_loss += loss.item()
-
-                if not is_valid:
-                    self.valid_validate_objects.append((x, y, objects, target, i, num))
-
-                print(f"Валидация: [{i}/{num}]", end='\r')
 
             if not count:
                 print(f"Не нашел валидных объектов для unit {self.unit}, direction {self.direction}. "

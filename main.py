@@ -1,20 +1,15 @@
 import os
 import yaml
-import wandb
-import pickle
-from time import time
 from typing import Union
 from argparse import ArgumentParser
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
 
 from dataloader import DataLoader
 from models.LSTMModel import LSTMModel
 from models.FullConnectedModel import FullyConnectedNN
 from models.MyModel import MyModel
-from supporting import Args, nice_print, date2str, get_time, Config, save_model
+from supporting import Args, date2str, Config
 
 existed_models = {"fully_model": FullyConnectedNN, "lstm_model": LSTMModel}
 
@@ -108,8 +103,9 @@ def main():
     with open(args.config, "r") as file:
         Config(yaml.load(file, yaml.SafeLoader))
 
+    torch.cuda.empty_cache()
     functions[args.method]()
-
+    torch.cuda.empty_cache()
 
 if __name__ == "__main__":
     main()

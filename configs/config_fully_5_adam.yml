@@ -3,25 +3,18 @@
 # Общие настройки
 main:
   # Директория для сохранения чекпоинтов моделей
-  checkpoint_save_dir: "./checkpoints_full_model_10_layers/"
+  checkpoint_save_dir: "./checkpoints_fully_5_adam/"
   # Название чекпоинтов
   checkpoint_string: "model_a{0}_p{1}_u{2}_d{3}_epoch{4}.pth"
+  # Максимальное количество чекпоинтов
+  max_count_checkpoint: 10
 
   # Директория для сохранения валидных объектов
   valid_objects_save_dir: "./pickle_dumps_valid_train/"
   # Название файла с валидными объектами
-  valid_objects_string: "dump_a{0}_p{1}_u{2}_d{3}.pl"
-  # Отключить работу файлов валидных объектов для определенной пары (unit, direction)
-  off_load_pickle_for_unit_direction:
-    -
-      - 0
-      - 2
-    -
-      - 1
-      - 2
-    -
-      - 2
-      - 2
+  valid_objects_string: "dump_random{0}_a{1}_p{2}_u{3}_d{4}.pl"
+  # Отключить загрузку файлов валидных объектов для определенной пары (unit, direction)
+  off_load_pickle_for_unit_direction: []
 
   # первый unit
   unit_start: 0
@@ -33,28 +26,31 @@ main:
   direction_last: 3
   # отключить обработку определенной пары (unit, direction)
   off_unit_direction: []
+  # Путь для модели загрузки
+  checkpoint_save: {}
 
 dataloader:
-  test_size: 0.2 # 0.1
-  valid_size: 0.2
+  # valid_size определяется автоматически
+  test_size: 0.1
   train_size: 0.7
+  random_state: 25
 
 # Настройки модели
 model:
   # Тип модели
-  tp: "fully_model" # [lstm_model, fully_model]
+  tp: fully_model # [lstm_model, fully_model]
   # Оптимизатор
-  optimizer: SGD # [Adam, SGD] get from optim. ....
+  optimizer: Adam # [Adam, SGD] get from optim. ....
   # Функция потерь
   loss_function: MSELoss # [L1Loss, MSELoss, CrossEntropyLoss] get from nn. ...
   # Максимальное количество эпох
   epoch: 1000
-  # Шаг обучения
-  lr: 0.000001
-  # Путь для модели загрузки
-  checkpoint_save: []
-  # Начать с эпохи:
-  start_epoch: []
+  # Начальный шаг обучения
+  lr: 0.00001
+  # Измненине шага обучения (умножение на заданное число)
+  lr_decay: 0.5
+  # Шаг изменения
+  lr_step: 300
 
 # Настройки
 settings:
@@ -69,14 +65,15 @@ settings:
 
 # Настройка wandb
 wandb:
+  turn_on: True
   # Название проекта
   project: "echkina"
   # Имя запуска
-  name: "echkina_full_10layer_sgd_model_unit_{0}_direction_{1}"
+  name: "echkina_{0}_{1}_{2}_model_unit_{3}_direction_{4}"
 
 # Настройка полносвязной модели
 fully_model:
-  num_of_layers: 10
+  num_of_layers: 5
 
 # Настройка модели временного ряда
 lstm_model:

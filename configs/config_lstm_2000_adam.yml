@@ -3,7 +3,7 @@
 # Общие настройки
 main:
   # Директория для сохранения чекпоинтов моделей
-  checkpoint_save_dir: "./checkpoints/"
+  checkpoint_save_dir: "./checkpoints_lstm_2000_adam/"
   # Название чекпоинтов
   checkpoint_string: "model_a{0}_p{1}_u{2}_d{3}_epoch{4}.pth"
   # Максимальное количество чекпоинтов
@@ -38,11 +38,11 @@ dataloader:
 # Настройки модели
 model:
   # Тип модели
-  tp:  # [lstm_model, fully_model]
+  tp: lstm_model # [lstm_model, fully_model]
   # Оптимизатор
-  optimizer:  # [Adam, SGD] get from optim. ....
+  optimizer: Adam # [Adam, SGD] get from optim. ....
   # Функция потерь
-  loss_function:  # [L1Loss, MSELoss, CrossEntropyLoss] get from nn. ...
+  loss_function: MSELoss # [L1Loss, MSELoss, CrossEntropyLoss] get from nn. ...
   # Максимальное количество эпох
   epoch: 1000
   # Начальный шаг обучения
