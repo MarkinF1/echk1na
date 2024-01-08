@@ -5,11 +5,12 @@ from typing import List, Optional, Tuple, Dict
 
 import torch
 import tqdm
+import yaml
 from sklearn.model_selection import train_test_split
 
 from db_classes import EchkinaReadyTableCrop, EchkinaReadyTable
 from db_connection import DataBase
-from supporting import nice_print, device, make_input_tensor, Config, database_name
+from supporting import nice_print, device, make_input_tensor, Config, database_name, Args
 
 
 class DataLoader:
@@ -78,6 +79,7 @@ class DataLoader:
             return
 
         del self.__arrays
+        self.__arrays = {}
         arr = self.__database.get_ready_data_by_unit_direction_crop(unit=self.__current_unit,
                                                                     direction=self.__current_direction)
         valid_arr = []
@@ -212,5 +214,28 @@ class DataLoader:
 
 
 if __name__ == "__main__":
-    dataloader = DataLoader()
-    dataloader.check_train_id_is_valid(1613)
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser(description="Описание программы")
+
+    parser.add_argument("-p", "--prediction_days", type=int, choices=[3, 14],
+                        help="На сколько дней вперед вы хотите предсказать.")
+    parser.add_argument("-a", "--analyze_days", type=int,
+                        help="Сколько дней взять для анализа.")
+    parser.add_argument("-c", "--config", type=str, help="Установка конкретного конфига программы.")
+
+    args = parser.parse_args()
+    with open(args.config, "r") as file:
+        Config(yaml.load(file, yaml.SafeLoader))
+    torch.cuda.empty_cache()
+
+    dataloader = DataLoader(count_predictions_days=args.prediction_days,
+                            count_analyze_days=args.analyze_days,
+                            count_directions=3,
+                            count_units=3)
+
+    for unit in range(3):
+        for direction in range(1, 4):
+            print(f"Unit: {unit}, Direction: {direction}")
+            dataloader.set_unit_direction(unit, direction)
+            dataloader.save_pickle()
