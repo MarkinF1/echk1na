@@ -14,7 +14,15 @@ from supporting import nice_print, device, make_input_tensor, Config, database_n
 
 
 class DataLoader:
+    """
+    Загрузчик предназначенный для работы с данными.
+    Реализован типо Singleton для отдельных дб. Таким образом,
+    можно создавать несколько загрузчиков для разных баз данных.
+    """
     class ArrayTypes:
+        """
+        3 типа массива (тренировочный, валидационный, тестировочный)
+        """
         train = "train"
         validate = "validate"
         test = "test"
@@ -50,24 +58,49 @@ class DataLoader:
         except KeyError:
             return None
 
-    def get_current_unit_direction(self):
+    def get_current_unit_direction(self) -> Tuple[Optional[int], Optional[int]]:
+        """
+        Возвращает текущие unit и direction, в которые установлен сейчас загрузчик.
+        :return:
+        """
         return self.__current_unit, self.__current_direction
 
-    def is_unit_direction_valid(self):
+    def is_unit_direction_valid(self) -> bool:
+        """
+        Проверка текущих unit и direction на валидность.
+        :return:
+        """
         return (self.__current_unit in range(Config.getInstance().main.unit_start,
                                              Config.getInstance().main.unit_last + 1)
                 and self.__current_direction in range(Config.getInstance().main.direction_start,
                                                       Config.getInstance().main.direction_last + 1))
 
     def __convert_days2count_values(self, days: int) -> int:
+        """
+        Конвертирует дни в количество данных, которое там должно быть.
+        :param days: дни
+        :return: количество данных
+        """
         in_one_day = self.__count_directions * self.__count_units * self.__count_points
         count = int(days * 1.5) * in_one_day
         return count
 
     def get_len_batch(self) -> int:
+        """
+        Возвращает длину батча необходимого для обучения.
+        :return: длина батча
+        """
         return self.__convert_days2count_values(self.__count_analyze_days.days)
 
     def set_unit_direction(self, unit: int, direction: int) -> None:
+        """
+        Для работы загрузчика необходимо установить ему конкретный unit
+        и direction с помощью данной функции, после чего по нему можно будет проходиться.
+        Здесь мы загружаем все строки с (unit, direction), которые подходят для подачи на модель,
+        и разделяем их на три массива данных (train, valid, test) с коэффициентами из конфиг-файла.
+        :param unit: unit
+        :param direction: direction
+        """
         nice_print(text=f"Инициализация DataLoader'a "
                         f"с параметрами unit: {unit}, direction: {direction}", suffix="=")
 
@@ -127,7 +160,11 @@ class DataLoader:
         nice_print(text=f"Тестовых объектов: {len(self.__arrays[self.ArrayTypes.test])}/{len(valid_arr)}",
                    suffix='', suffix2='-')
 
-    def save_pickle(self):
+    def save_pickle(self) -> None:
+        """
+        Сохранить дамп обработанных данных.
+        Тип файла куда сохранить описан в конфиг-файле.
+        """
         path = os.path.join(Config.getInstance().main.valid_objects_save_dir,
                             Config.getInstance().main.valid_objects_string)
 
@@ -137,7 +174,13 @@ class DataLoader:
         ), "wb") as file:
             pickle.dump(self.__arrays, file)
 
-    def load_pickle(self, unit, direction, path):
+    def load_pickle(self, unit: int, direction: int, path: str) -> None:
+        """
+        Заполнение загрузчика из файла.
+        :param unit: unit
+        :param direction: direction
+        :param path: путь до дампа
+        """
         self.__current_unit = unit
         self.__current_direction = direction
 
@@ -145,6 +188,11 @@ class DataLoader:
             self.__arrays = pickle.load(file)
 
     def check_train_id_is_valid(self, id_train: int) -> List[datetime.date]:
+        """
+        Проверка насоса по его id на валидные даты.
+        :param id_train: id насоса
+        :return: список валидных дат
+        """
         objects = self.__database.get_ready_data_by_train(id_train=id_train)
         if len(objects) < 2:
             return []
@@ -190,24 +238,21 @@ class DataLoader:
 
     def train(self) -> None:
         """
-        Переводит DataLoader в train режим:
-        меняет массив на тренировочный, обнуляет индексацию.
+        Переводит DataLoader в train режим
         """
         if self.__current_array_type != self.ArrayTypes.train:
             self.__current_array_type = self.ArrayTypes.train
 
     def validate(self) -> None:
         """
-        Переводит DataLoader в validate режим:
-        меняет массив на валидационный, обнуляет индексацию.
+        Переводит DataLoader в validate режим
         """
         if self.__current_array_type != self.ArrayTypes.validate:
             self.__current_array_type = self.ArrayTypes.validate
 
     def eval(self):
         """
-        Переводит DataLoader в test режим:
-        меняет массив на тестовый, обнуляет индексацию.
+        Переводит DataLoader в test режим
         """
         if self.__current_array_type != self.ArrayTypes.test:
             self.__current_array_type = self.ArrayTypes.test
@@ -223,10 +268,12 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--analyze_days", type=int,
                         help="Сколько дней взять для анализа.")
     parser.add_argument("-c", "--config", type=str, help="Установка конкретного конфига программы.")
+    parser.add_argument("-u", "--unit", type=int, default=None)
+    parser.add_argument("-d", "--direction", type=int, default=None)
 
     args = parser.parse_args()
     with open(args.config, "r") as file:
-        Config(yaml.load(file, yaml.SafeLoader))
+        config = Config(yaml.load(file, yaml.SafeLoader))
     torch.cuda.empty_cache()
 
     dataloader = DataLoader(count_predictions_days=args.prediction_days,
@@ -234,8 +281,25 @@ if __name__ == "__main__":
                             count_directions=3,
                             count_units=3)
 
-    for unit in range(3):
-        for direction in range(1, 4):
-            print(f"Unit: {unit}, Direction: {direction}")
-            dataloader.set_unit_direction(unit, direction)
+    if args.unit is not None or args.direction is not None:
+        if args.unit is not None and args.direction is not None:
+            print(f"Unit: {args.unit}, Direction: {args.direction}")
+            dataloader.set_unit_direction(args.unit, args.direction)
             dataloader.save_pickle()
+        else:
+            print("Нужно указать и unit, и direction, или же ничего из этого не указывать.")
+            exit(-1)
+    else:
+        for unit in range(3):
+            for direction in range(1, 4):
+                print(f"Unit: {unit}, Direction: {direction}")
+                path = os.path.join(Config.getInstance().main.valid_objects_save_dir,
+                                    Config.getInstance().main.valid_objects_string).format(
+                    config.dataloader.random_state, args.analyze_days, args.prediction_days, unit, direction)
+
+                if os.path.exists(path):
+                    print(f"Дамп {path}, direction {direction} уже существует, пропускаю.")
+                    continue
+
+                dataloader.set_unit_direction(unit, direction)
+                dataloader.save_pickle()

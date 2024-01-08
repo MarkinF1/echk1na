@@ -5,7 +5,8 @@ from sqlalchemy import Column, ForeignKey, Integer, DateTime, Float, String, Boo
 
 Base = declarative_base()
 
-
+# ---------------------------
+# Классы для обработки данных
 class EchkinaTrain(Base):
     __tablename__ = "train_6"
 
@@ -67,6 +68,8 @@ class EchkinaTmpTable(Base):
     alarm = Column(Integer)
 
 
+# ---------------------------
+# Классы для обучения и тестирования модели
 class EchkinaReadyTable(Base):
     __tablename__   = "ready_data"
 

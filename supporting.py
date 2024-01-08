@@ -12,6 +12,11 @@ database_name = "echkina"
 
 
 class Args:
+    """
+    Класс аргументов коммандной строки.
+    Реализован типо Singleton, сначала создаем
+    через (), а последующие обращения через getInstance()
+    """
     instance = None
 
     def __init__(self, method, prediction_days, analyze_days, config, name, id_train, date):
@@ -36,27 +41,39 @@ class Args:
 
 
 class Config:
+    """
+    Класс для содержания конфига.
+    Реализован типо Singleton, сначала создаем
+    через (), а последующие обращения через getInstance()
+    """
+    # Главные настройки
     __main_config = namedtuple('MainConfig',
                                ("checkpoint_save_dir", "checkpoint_string", "valid_objects_save_dir",
                                 "valid_objects_string", "off_load_pickle_for_unit_direction", "unit_start",
                                 "unit_last", "direction_start", "direction_last", "off_unit_direction",
                                 "checkpoint_save", "max_count_checkpoint")
                                )
+    # Настройки загрузчика
     __dataloader_config = namedtuple('DataloaderConfig',
                                      ("test_size", "train_size", "random_state")
                                      )
+    # Настройки модели
     __model_config = namedtuple('ModelConfig',
                                 ("tp", "optimizer", "loss_function", "epoch", "lr", "lr_decay", "lr_step")
                                 )
+    # Настройки работы программы
     __settings_config = namedtuple('SettingsConfig',
                                    ("off_all_prints", "print_time", "print_predict", "print_predict_step")
                                    )
+    # Настройки вывода графиков на сайт wandb
     __wandb_config = namedtuple('WandbConfig',
                                 ("turn_on", "project", "name")
                                 )
+    # Настройки полносвязной модели
     __fully_connected_model_config = namedtuple('FullyModelConfig',
                                                 ("num_of_layers",)
                                                 )
+    # Настройки LSTM модели
     __lstm_model_config = namedtuple('LSTMConfig',
                                      ("hidden_size", )
                                      )
@@ -84,39 +101,62 @@ class Config:
         return cls.instance
 
 
+# Класс сохранения модели
 save_obj = namedtuple('SaveModel',
                       ('model', 'epoch', "loss_fun", "optimizer", "unit", "direction", "best_loss")
                       )
 
 
 def get_optimizer(model_parameters, off_print: bool = False):
+    """
+    Создание оптимизатора назначенного из конфиг-файла.
+    :param model_parameters: параметры модели (обычно через model.parameters())
+    :param off_print: можно отключить вывод о том, что создается оптимизатор
+    :return: объект оптимизатора
+    """
     config = Config.getInstance()
 
-    # Создание оптимизатора
     nice_print(text=f"Создание оптимизатора {config.model.optimizer}", suffix='', suffix2='-',
                off=off_print)
     if not hasattr(optim, config.model.optimizer):
         print(f"Error: не нашел optimizer {config.model.optimizer} в optim.")
         exit(-1)
 
+    # Создание оптимизатора
     optimizer = optim.__getattribute__(config.model.optimizer)(model_parameters, lr=config.model.lr)
     return optimizer
 
 
 def get_loss_function(off_print: bool = False):
+    """
+    Создание функции потерь назначенной из конфиг-файла.
+    :param off_print: можно отключить вывод о том, что создается функция потерь
+    :return: функция потерь
+    """
     config = Config.getInstance()
 
-    # Определение функции потерь
     nice_print(text=f"Создание функции потерь {config.model.loss_function}", suffix='', suffix2='-',
                off=off_print)
     if not hasattr(nn, config.model.loss_function):
         print(f"Error: не нашел loss_function {config.model.loss_function} в torch.nn.")
         exit(-1)
+
+    # Определение функции потерь
     criterion = nn.__getattribute__(config.model.loss_function)().to(device())
     return criterion
 
 
 def save_model(model, loss_fun, optimizer, epoch: int, unit: int, direction: int, best_loss: float) -> None:
+    """
+    Функция сохранения модели и дополнительных параметров.
+    :param model: модель
+    :param loss_fun: функция потерь
+    :param optimizer: оптимизатор
+    :param epoch: номер эпохи
+    :param unit: unit
+    :param direction: direction
+    :param best_loss: лучшая ошибка
+    """
     temp = save_obj(model=model,
                     epoch=epoch,
                     loss_fun=loss_fun,
@@ -131,10 +171,24 @@ def save_model(model, loss_fun, optimizer, epoch: int, unit: int, direction: int
                path.format(Args.getInstance().analyze_days, Args.getInstance().prediction_days, unit, direction, epoch))
 
 
-def load_model(checkpoint_path: str): return save_obj(**torch.load(checkpoint_path))
+def load_model(checkpoint_path: str):
+    """
+    Загрузка модели.
+    :param checkpoint_path: путь до чекпоинта
+    :return: набор сохраненых данных
+    """
+    return save_obj(**torch.load(checkpoint_path))
 
 
 def nice_print(text: str, num: int = 40, suffix: str = '*', suffix2: Optional[str] = None, off=False) -> None:
+    """
+    Красивый вывод.
+    :param text: текст вывода
+    :param num: количество символов до и после
+    :param suffix: символ до текста
+    :param suffix2: символ после текста
+    :param off: выключение вывода
+    """
     if off:
         return
 
@@ -146,10 +200,20 @@ def nice_print(text: str, num: int = 40, suffix: str = '*', suffix2: Optional[st
 
 
 def date2str(date: datetime.date) -> str:
+    """
+    Перевод даты в строку.
+    :param date: дата
+    :return: строка
+    """
     return date.strftime("%Y-%m-%d")
 
 
-def get_time(time):
+def get_time(time) -> str:
+    """
+    Перевод числа во время
+    :param time: время в виде числа (вроде int)
+    :return: строка формата "{}h {}m {}s"
+    """
     hours = time // 3600
     time -= hours * 3600
 
@@ -167,11 +231,20 @@ def get_time(time):
     return curr_time
 
 
-def device():
+def device() -> str:
+    """
+    Возвращает устройство, на котором будет проходить обработка.
+    :return: "cuda" или "cpu"
+    """
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def make_input_tensor(x):
+    """
+    Создание тензора из массива х.
+    :param x: массив данных
+    :return: нормализованный тензор
+    """
     x = torch.tensor(x, dtype=torch.float32).to(device())
     mean = torch.mean(x)
     std = torch.std(x)

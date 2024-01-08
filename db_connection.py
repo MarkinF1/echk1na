@@ -237,12 +237,20 @@ class DataBase:
 
     def get_ready_data_special(self, id_train: int, max_date: datetime.datetime, min_date: datetime.datetime,
                                arr_idx: int) -> List[EchkinaReadyTable]:
+        """
+        Возвращает данные подходящие под параметры обучения.
+        :param id_train: id насоса
+        :param min_date: дата с которой можно анализировать
+        :param max_date: дата до которой можно анализировать
+        :param arr_idx: индекс массива
+        :return: спискок элемнтов
+        """
         with self.session() as session:
             condition = and_(EchkinaReadyTable.id_train == id_train,
                              EchkinaReadyTable.date <= max_date,
                              EchkinaReadyTable.date >= min_date,
                              EchkinaReadyTable.arr_idx == arr_idx)
-            result = session.query(EchkinaReadyTable).filter(condition).all()
+            result = session.query(EchkinaReadyTable).filter(condition).order_by(EchkinaReadyTable.date).all()
             return result
 
 
