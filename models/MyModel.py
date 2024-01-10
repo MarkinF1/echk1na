@@ -1,3 +1,5 @@
+import csv
+import datetime
 import os
 import pickle
 from time import time
@@ -8,8 +10,10 @@ import tqdm
 import wandb
 
 from dataloader import DataLoader
+from db_classes import EchkinaReadyTable
+from db_connection import DataBase
 from supporting import Config, nice_print, get_time, Args, get_optimizer, get_loss_function, save_obj, device, \
-    database_name
+    database_name, date2str, make_input_tensor
 
 
 class MyChildModel:
@@ -76,7 +80,7 @@ class MyChildModel:
         epoch_time = time()
         if self.config.wandb.turn_on:
             model_type = self.config.model.tp
-            model_param_string = '_'.join(self.config.__getattribute__(model_type)._asdict().values())
+            model_param_string = '_'.join(list(map(str, self.config.__getattribute__(model_type)._asdict().values())))
             graphic_wandb = wandb.init(
                           name=self.config.wandb.name.format(model_type, model_param_string,
                                                              self.config.model.optimizer, self.unit, self.direction),
@@ -85,7 +89,8 @@ class MyChildModel:
 
         nice_print(text="Начинаю обучение.", suffix='*', off=self.config.settings.off_all_prints)
         start_epoch = self.epoch
-        for self.epoch in range(start_epoch, self.config.model.epoch):
+        print("Эпоха ", end=' ')
+        for self.epoch in tqdm.tqdm(range(start_epoch, self.config.model.epoch)):
             self.model.train()
             train_arr.train()
 
@@ -99,7 +104,7 @@ class MyChildModel:
 
             sum_loss = 0
             count = 0
-            for i, (x, y, target) in enumerate(tqdm.tqdm(train_arr)):
+            for i, (x, y, target) in enumerate(train_arr):
                 count += 1
                 self.optim.zero_grad()
                 output = self.model(x, target.param1, target.param2)
@@ -135,6 +140,9 @@ class MyChildModel:
                 for g in self.optim.param_groups:
                     g["lr"] *= self.config.model.lr_decay
 
+        if self.save_paths:
+            nice_print(text=f"Лучшая эпоха: {self.save_paths[-1]}", suffix='-')
+
         if self.config.wandb.turn_on:
             try:
                 graphic_wandb.finish()
@@ -149,7 +157,7 @@ class MyChildModel:
         with torch.no_grad():
             sum_loss = 0
             count = 0
-            for i, (x, y, target) in enumerate(tqdm.tqdm(dataloader)):
+            for i, (x, y, target) in enumerate(dataloader):
                 count += 1
                 output = self.model(x, target.param1, target.param2)
                 loss = self.loss_fun(output, y)
@@ -182,18 +190,22 @@ class MyChildModel:
                 self.best_loss = epoch_loss
                 self.save()
 
-    def eval(self) -> None:
+    def test(self) -> None:
+        nice_print(text=f"ТЕСТИРОВАНИЕ ДЛЯ UNIT: {self.unit}, DIRECTION: {self.direction}",
+                   suffix="/\\", suffix2="\\/", num=17)
+
+        valid_save_path = os.path.join(self.config.main.valid_objects_save_dir, self.config.main.valid_objects_string)
+        valid_save_path = valid_save_path.format(self.config.dataloader.random_state, self.args.analyze_days,
+                                                 self.args.prediction_days, "{0}", "{1}")
+
         self.model.eval()
-        dataloader = DataLoader.getInstance(database=database_name)
-        dataloader.set_unit_direction(self.unit, self.direction)
+        dataloader = self.__load_valid_objects(valid_save_path)
         dataloader.eval()
 
         with torch.no_grad():
-            test_arr = dataloader
-
             losses = []
             count = 0
-            for x, y, objects, target, i, num in test_arr:
+            for x, y, objects, target, i, num in tqdm.tqdm(dataloader):
                 count += 1
                 output = self.model(x, target.param1, target.param2)
                 loss = self.loss_fun(output, y)
@@ -205,8 +217,10 @@ class MyChildModel:
         nice_print(text=f"Ошибка на тестовом наборе: {epoch_loss}.\nМаксимальная ошибка: {max(losses)}.\n"
                         f"Минимальная ошибка: {min(losses)}.", suffix='=')
 
-    def predict(self) -> None:
-        pass
+    def predict(self, x: torch.Tensor, param1, param2) -> None:
+        y = self.model(x, param1, param2)
+        nice_print(text=f"Unit: {self.unit}, direction: {self.direction}, предсказание: {y}",
+                   suffix="-", suffix2="")
 
     def save(self) -> None:
         temp = save_obj(model=self.model,
@@ -228,9 +242,12 @@ class MyChildModel:
 
 
 class MyModel:
-    def __init__(self, create_model_fun):
+    def __init__(self, create_model_fun=None):
         self.__create_model_fun = create_model_fun
-        self.__model_type = self.__create_model_fun().__class__.__name__
+
+        self.__model_type = None
+        if self.__create_model_fun is not None:
+            self.__model_type = self.__create_model_fun().__class__.__name__
 
         self.args = Args.getInstance()
         self.config = Config.getInstance()
@@ -251,9 +268,71 @@ class MyModel:
             model.eval()
 
     def predict(self):
+        def create_obj(row):
+            headers = ["id", "id_train", "id_point", "id_measure", "direction", "unit", "date", "value",
+                       "alarm3", "alarm4", "param1", "param2", "arr_idx"]
+            for i in range(6):
+                if row[i] != "":
+                    row[i] = int(row[i])
+                else:
+                    row[i] = None
+            if row[6] != "":
+                row[6] = datetime.datetime.strptime(row[6].split(' ')[0], "%Y-%m-%d").date()
+            else:
+                row[6] = None
+            for i in range(7, 12):
+                if row[i] != "":
+                    row[i] = float(row[i])
+                else:
+                    row[i] = None
+            if row[12] != "":
+                row[12] = int(row[12])
+            else:
+                row[12] = None
+            row = {key: val for key, val in zip(headers, row)}
+            return EchkinaReadyTable(**row)
+
         nice_print(f"{self.name}: predict.")
+
+        id_train = self.args.id_train
+        date = self.args.date
+        if id_train is None or date is None:
+            print("Введите id насоса" if id_train is None else "",
+                  "Введите дату, на которую нужно предсказать" if date else "")
+            exit(0)
+
+        max_date = date - datetime.timedelta(days=self.args.prediction_days)
+        min_date = max_date - datetime.timedelta(days=self.args.analyze_days + 2)
+
+        objects = []
+        with open(self.args.file, 'r') as file:
+            reader = csv.reader(file, delimiter=';')
+            for row in reader:
+                obj = create_obj(row)
+
+                if id_train == obj.id_train and min_date <= obj.date <= max_date:
+                    objects.append(obj)
+
+        objects.sort(key=lambda x: x.date)
+        dataloader = DataLoader(count_predictions_days=self.args.prediction_days,
+                                count_analyze_days=self.args.analyze_days)
+
+        if dataloader.get_len_batch() > len(objects):
+            nice_print(text=f"Предсказание невозможно! Не хватает данных для предсказания. \n"
+                            f"Требуется: {dataloader.get_len_batch()}\nИмеется только: {len(objects)}", suffix='!')
+            return
+
+        objects = objects[-dataloader.get_len_batch():]
+        values = [obj.value for obj in objects]
+        x = make_input_tensor(values)
         for model in self.__child_models.values():
-            model.predict()
+            param1, param2 = None, None
+            for obj in objects:
+                if obj.unit == model.unit and obj.direction == model.direction:
+                    param1 = obj.param1
+                    param2 = obj.param2
+
+            model.predict(x, param1, param2)
 
     def save(self, unit: Optional[int] = None, direction: Optional[int] = None) -> None:
         units = range(self.config.main.unit_start, self.config.main.unit_last + 1) if unit is None else [unit]
@@ -276,6 +355,10 @@ class MyModel:
         def create_new_model():
             nice_print(text=f"Unit - {unit}, direction - {direction}: Создание модели {self.__model_type}",
                        suffix='', suffix2='-', off=self.config.settings.off_all_prints)
+            if self.__create_model_fun is None:
+                print("Функция создания модели None. Модель не будет создана.")
+                return
+
             model = self.__create_model_fun()
             optimizer = get_optimizer(model.parameters(), off_print=True)
             loss_function = get_loss_function(off_print=True)

@@ -125,12 +125,11 @@ def main() -> None:
     parser.add_argument("-a", "--analyze_days", type=int,
                         help="Сколько дней взять для анализа.")
     parser.add_argument("-c", "--config", type=str, help="Установка конкретного конфига программы.")
-    parser.add_argument("-n", "--name", type=str, default=None,
-                        help="Название насоса.")
     parser.add_argument("-i", "--id_train", type=int, default=None,
                         help="Id насоса.")
     parser.add_argument("-d", "--date", type=str, default=None,
                         help="Дата на которую нужно совершить предсказание.")
+    parser.add_argument("-f", "--file", type=str, default=None, help="Файл данных формата csv.")
 
     args = Args(**vars(parser.parse_args()))
     with open(args.config, "r") as file:

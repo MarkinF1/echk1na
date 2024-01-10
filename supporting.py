@@ -19,17 +19,17 @@ class Args:
     """
     instance = None
 
-    def __init__(self, method, prediction_days, analyze_days, config, name, id_train, date):
+    def __init__(self, method, prediction_days, analyze_days, config, id_train, date, file):
         if Args.instance is None:
             self.method: str = method
             self.prediction_days: int = prediction_days
             self.analyze_days: int = analyze_days
             self.config: str = config
-            self.name: Optional[str] = name
             self.id_train: Optional[int] = id_train
             self.date: Optional[datetime.date] = None
             if date:
                 self.date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
+            self.file = file
             Args.instance = self
 
     @classmethod
@@ -239,7 +239,7 @@ def device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def make_input_tensor(x):
+def make_input_tensor(x) -> torch.Tensor:
     """
     Создание тензора из массива х.
     :param x: массив данных
