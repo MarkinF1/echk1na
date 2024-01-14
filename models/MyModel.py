@@ -1,19 +1,17 @@
-import csv
-import datetime
 import os
-import pickle
+import csv
+import tqdm
+import torch
+import wandb
+import datetime
 from time import time
 from typing import Optional, Dict, List
 
-import torch
-import tqdm
-import wandb
-
+from logger import logger
 from dataloader import DataLoader
 from db_classes import EchkinaReadyTable
-from db_connection import DataBase
-from supporting import Config, nice_print, get_time, Args, get_optimizer, get_loss_function, save_obj, device, \
-    database_name, date2str, make_input_tensor
+from supporting import Config, nice_print, get_time, Args, get_optimizer, get_loss_function, save_obj, database_name, \
+                        make_input_tensor
 
 
 class MyChildModel:
@@ -48,20 +46,19 @@ class MyChildModel:
         if (self.config.main.off_load_pickle_for_unit_direction is None or
                 [self.unit, self.direction] not in self.config.main.off_load_pickle_for_unit_direction):
             if os.path.exists(path.format(self.unit, self.direction)):
-                nice_print(text=f"Нашел дамп валидных объектов для unit {self.unit} и direction {self.direction}.",
-                           suffix='', suffix2='-')
+                logger.info(text=f"Нашел дамп валидных объектов для unit {self.unit} и direction {self.direction}.")
                 print("Загружаю дамп...", end="\r")
                 dataloader.load_pickle(self.unit, self.direction, path)
                 print("Дамп загружен.\n", end="\r")
             else:
-                nice_print(text=f"Дамп валидных объектов для analyze {self.args.analyze_days}, prediction "
+                logger.info(text=f"Дамп валидных объектов для analyze {self.args.analyze_days}, prediction "
                                 f"{self.args.prediction_days}, unit {self.unit} и direction {self.direction} не найден."
-                                f" Dataloader устанавливает массивы для обучения.", suffix='', suffix2='-')
+                                f" Dataloader устанавливает массивы для обучения.")
                 dataloader.set_unit_direction(self.unit, self.direction)
                 dataloader.save_pickle()
         else:
-            nice_print(text=f"Дамп валидных объектов для unit {self.unit} и direction {self.direction} запрещен к "
-                            f"загрузке. Запускаюсь с пустым массивом валидных объектов.", suffix='', suffix2='-')
+            logger.info(text=f"Дамп валидных объектов для unit {self.unit} и direction {self.direction} запрещен к "
+                            f"загрузке. Запускаюсь с пустым массивом валидных объектов.")
             dataloader.set_unit_direction(self.unit, self.direction)
             dataloader.save_pickle()
         return dataloader
@@ -72,7 +69,7 @@ class MyChildModel:
                                                  self.args.prediction_days, "{0}", "{1}")
 
         nice_print(text=f"ОБУЧЕНИЕ ДЛЯ UNIT: {self.unit}, DIRECTION: {self.direction}",
-                   suffix="/\\", suffix2="\\/", num=17)
+                   prefix="/\\", postfix="\\/", num=17, log_fun=logger.info)
 
         train_arr = self.__load_valid_objects(path=valid_save_path)
 
@@ -87,20 +84,12 @@ class MyChildModel:
                           project=self.config.wandb.project.format(self.unit, self.direction),
                           config={"epochs": self.config.model.epoch, "lr": self.config.model.lr})
 
-        nice_print(text="Начинаю обучение.", suffix='*', off=self.config.settings.off_all_prints)
+        logger.info("Начинаю обучение.")
         start_epoch = self.epoch
-        print("Эпоха ", end=' ')
+        logger.info("Эпоха: ")
         for self.epoch in tqdm.tqdm(range(start_epoch, self.config.model.epoch)):
             self.model.train()
             train_arr.train()
-
-            if self.config.settings.print_time:
-                epoch_duration = time() - epoch_time
-                nice_print(text=f"Epoch: {self.epoch + 1}/{self.config.model.epoch} " +
-                                (f"Время одной эпохи: {get_time(epoch_duration)}" if self.epoch else ""),
-                           suffix="=", off=self.config.settings.off_all_prints)
-
-                epoch_time = time()
 
             sum_loss = 0
             count = 0
@@ -114,12 +103,12 @@ class MyChildModel:
                 self.optim.step()
 
                 if self.config.settings.print_predict and i % self.config.settings.print_predict_step == 0:
-                    print(f"model.predict: {output}\ntarget:{y}\nloss: {loss.item()}")
+                    logger.debug(f"model.predict: {output}\ntarget:{y}\nloss: {loss.item()}")
 
                 sum_loss += loss.item()
 
             if not count:
-                print(f"Не нашел валидных объектов для unit {self.unit}, direction {self.direction}. "
+                logger.warning(f"Не нашел валидных объектов для unit {self.unit}, direction {self.direction}. "
                       f"Продолжить [y/n]?")
                 n = input()
                 if n == 'y':
@@ -132,7 +121,7 @@ class MyChildModel:
                 try:
                     wandb.log({"train_loss": epoch_loss, "epoch": self.epoch})
                 except Exception as exp:
-                    print(f"[ERROR] Wandb: не смог сделать log. {exp}.")
+                    logger.error(f"Wandb: не смог сделать log. {exp}.")
 
             self.validate()
 
@@ -141,13 +130,13 @@ class MyChildModel:
                     g["lr"] *= self.config.model.lr_decay
 
         if self.save_paths:
-            nice_print(text=f"Лучшая эпоха: {self.save_paths[-1]}", suffix='-')
+            logger.info(f"Лучшая эпоха: {self.save_paths[-1]}")
 
         if self.config.wandb.turn_on:
             try:
                 graphic_wandb.finish()
             except Exception:
-                print("Не удалось нормально завершить wandb_unit_%s_direction_%s" % (self.unit, self.direction))
+                logger.warning(f"Не удалось нормально завершить wandb_unit_{self.unit}_direction_{self.direction}.")
 
     def validate(self) -> None:
         self.model.eval()
@@ -184,15 +173,14 @@ class MyChildModel:
                     print(f"[ERROR] Wandb: не смог сделать log. {exp}.")
 
             if self.best_loss is None or self.best_loss > epoch_loss:
-                nice_print(text=f"Best_loss: {self.best_loss} ----- Current_loss: {epoch_loss} "
-                                f"Save checkpoint epoch: {self.epoch}",
-                           suffix="-")
+                logger.debug(f"Best_loss: {self.best_loss} ----- Current_loss: {epoch_loss} "
+                             f"Save checkpoint epoch: {self.epoch}.")
                 self.best_loss = epoch_loss
                 self.save()
 
     def test(self) -> None:
         nice_print(text=f"ТЕСТИРОВАНИЕ ДЛЯ UNIT: {self.unit}, DIRECTION: {self.direction}",
-                   suffix="/\\", suffix2="\\/", num=17)
+                   prefix="/\\", postfix="\\/", num=17, log_fun=logger.info)
 
         valid_save_path = os.path.join(self.config.main.valid_objects_save_dir, self.config.main.valid_objects_string)
         valid_save_path = valid_save_path.format(self.config.dataloader.random_state, self.args.analyze_days,
@@ -215,12 +203,11 @@ class MyChildModel:
             epoch_loss = sum(losses) / count
 
         nice_print(text=f"Ошибка на тестовом наборе: {epoch_loss}.\nМаксимальная ошибка: {max(losses)}.\n"
-                        f"Минимальная ошибка: {min(losses)}.", suffix='=')
+                        f"Минимальная ошибка: {min(losses)}.", prefix='=', log_fun=logger.info)
 
     def predict(self, x: torch.Tensor, param1, param2) -> None:
         y = self.model(x, param1, param2)
-        nice_print(text=f"Unit: {self.unit}, direction: {self.direction}, предсказание: {y}",
-                   suffix="-", suffix2="")
+        logger.info(text=f"Unit: {self.unit}, direction: {self.direction}, предсказание: {y}.")
 
     def save(self) -> None:
         temp = save_obj(model=self.model,
@@ -258,41 +245,53 @@ class MyModel:
         self.__load()
 
     def train(self):
-        nice_print(f"{self.name}: train.")
+        logger.debug(f"{self.name}: train.")
         for model in self.__child_models.values():
             model.train()
 
     def eval(self):
-        nice_print(f"{self.name}: eval.")
+        logger.debug(f"{self.name}: eval.")
         for model in self.__child_models.values():
-            model.eval()
+            model.test()
 
     def predict(self):
         def create_obj(row):
             headers = ["id", "id_train", "id_point", "id_measure", "direction", "unit", "date", "value",
                        "alarm3", "alarm4", "param1", "param2", "arr_idx"]
-            for i in range(6):
-                if row[i] != "":
-                    row[i] = int(row[i])
-                else:
+            for i in range(len(row)):
+                if row[i] == "":
                     row[i] = None
-            if row[6] != "":
-                row[6] = datetime.datetime.strptime(row[6].split(' ')[0], "%Y-%m-%d").date()
-            else:
-                row[6] = None
-            for i in range(7, 12):
-                if row[i] != "":
+                elif row[i].find(".") != -1:
                     row[i] = float(row[i])
+                elif row[i].split("-") == 2:
+                    datetime.datetime.strptime(row[i].split(' ')[0], "%Y-%m-%d").date()
                 else:
-                    row[i] = None
-            if row[12] != "":
-                row[12] = int(row[12])
-            else:
-                row[12] = None
+                    try:
+                        row[i] = int(row[i])
+                    except Exception as exp:
+                        logger.exception(text=f"Не смог преобразовать {type(row[i])} в int. Exception: {exp}")
+            #for i in range(6):
+            #    if row[i] != "":
+            #        row[i] = int(row[i])
+            #    else:
+            #        row[i] = None
+            #if row[6] != "":
+            #    row[6] = datetime.datetime.strptime(row[6].split(' ')[0], "%Y-%m-%d").date()
+            #else:
+            #    row[6] = None
+            #for i in range(7, 12):
+            #    if row[i] != "":
+            #        row[i] = float(row[i])
+            #    else:
+            #        row[i] = None
+            #if row[12] != "":
+            #    row[12] = int(row[12])
+            #else:
+            #    row[12] = None
             row = {key: val for key, val in zip(headers, row)}
             return EchkinaReadyTable(**row)
 
-        nice_print(f"{self.name}: predict.")
+        logger.debug(f"{self.name}: predict.")
 
         id_train = self.args.id_train
         date = self.args.date
@@ -319,7 +318,8 @@ class MyModel:
 
         if dataloader.get_len_batch() > len(objects):
             nice_print(text=f"Предсказание невозможно! Не хватает данных для предсказания. \n"
-                            f"Требуется: {dataloader.get_len_batch()}\nИмеется только: {len(objects)}", suffix='!')
+                            f"Требуется: {dataloader.get_len_batch()}\nИмеется только: {len(objects)}",
+                       prefix='!', log_fun=logger.warning)
             return
 
         objects = objects[-dataloader.get_len_batch():]
@@ -342,7 +342,8 @@ class MyModel:
         units_and_directions = ((unit, direction) for unit in units for direction in directions
                                 if [unit, direction] not in self.config.main.off_unit_direction)
 
-        nice_print(f"{self.name}: save models with (unit, direction) {units_and_directions}.")
+        nice_print(text=f"{self.name}: сохранение моделей с (unit, direction) {units_and_directions}.",
+                   log_fun=logger.debug)
         for unit, direction in self.__child_models.keys():
             model = self.__child_models[self.key.format(unit, direction)]
             if model is not None:
@@ -353,8 +354,7 @@ class MyModel:
         Загрузка или создание моделей.
         """
         def create_new_model():
-            nice_print(text=f"Unit - {unit}, direction - {direction}: Создание модели {self.__model_type}",
-                       suffix='', suffix2='-', off=self.config.settings.off_all_prints)
+            logger.debug(text=f"Unit - {unit}, direction - {direction}: Создание модели {self.__model_type}")
             if self.__create_model_fun is None:
                 print("Функция создания модели None. Модель не будет создана.")
                 return
@@ -367,7 +367,7 @@ class MyModel:
                                                                                  loss_fun=loss_function,
                                                                                  unit=unit, direction=direction)
 
-        nice_print(text="Загрузка и создание моделей.")
+        logger.info(text="Загрузка и создание моделей.")
         dictionary = self.config.main.checkpoint_save
         units_directions = [(unit, direction)
                             for unit in range(self.config.main.unit_start,
@@ -379,8 +379,8 @@ class MyModel:
         for unit, direction in tqdm.tqdm(units_directions):
             try:
                 nice_print(text=f"Unit - {unit}, direction - {direction}: Загрузка модели по пути "
-                                f"{dictionary[self.key.format(unit, direction)]}", suffix='', suffix2='-',
-                           off=self.config.settings.off_all_prints)
+                                f"{dictionary[self.key.format(unit, direction)]}", prefix='', postfix='-',
+                           off=self.config.settings.off_all_prints, log_fun=logger.debug)
                 self.__child_models[self.key.format(unit, direction)] = MyChildModel(
                     **torch.load(dictionary[self.key.format(unit, direction)]))
             except (KeyError, TypeError):

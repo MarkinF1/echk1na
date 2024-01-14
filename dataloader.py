@@ -1,16 +1,16 @@
-import datetime
-import os.path
-import pickle
-from typing import List, Optional, Tuple, Dict
-
-import torch
-import tqdm
 import yaml
+import tqdm
+import torch
+import pickle
+import os.path
+import datetime
+from typing import List, Optional, Tuple, Dict
 from sklearn.model_selection import train_test_split
 
-from db_classes import EchkinaReadyTableCrop, EchkinaReadyTable
+from logger import logger
 from db_connection import DataBase
-from supporting import nice_print, device, make_input_tensor, Config, database_name, Args
+from db_classes import EchkinaReadyTableCrop
+from supporting import nice_print, device, make_input_tensor, Config, database_name
 
 
 class DataLoader:
@@ -56,6 +56,7 @@ class DataLoader:
         try:
             return cls.__instance[database]
         except KeyError:
+            logger.error(f"Dataloader для {database} не настроен.")
             return None
 
     def get_current_unit_direction(self) -> Tuple[Optional[int], Optional[int]]:
@@ -81,8 +82,10 @@ class DataLoader:
         :param days: дни
         :return: количество данных
         """
-        in_one_day = self.__count_directions * self.__count_units * self.__count_points
-        count = int(days * 1.5) * in_one_day
+        # Использовал сначала это, но данные слишком расплывчаты, это не подойдет
+        # in_one_day = self.__count_directions * self.__count_units * self.__count_points
+        # count = int(days * 1.5) * in_one_day
+        count = self.__count_points * int(days * 1.5)
         return count
 
     def get_len_batch(self) -> int:
@@ -101,8 +104,7 @@ class DataLoader:
         :param unit: unit
         :param direction: direction
         """
-        nice_print(text=f"Инициализация DataLoader'a "
-                        f"с параметрами unit: {unit}, direction: {direction}", suffix="=")
+        logger.debug(f"Инициализация DataLoader'a с параметрами unit: {unit}, direction: {direction}")
 
         self.__current_unit = unit
         self.__current_direction = direction
@@ -118,6 +120,8 @@ class DataLoader:
         valid_arr = []
         for elem in tqdm.tqdm(arr):
             objects = self.__database.get_ready_data_special(id_train=elem.id_train,
+                                                             unit=self.__current_unit,
+                                                             direction=self.__current_direction,
                                                              max_date=elem.date - self.__count_predictions_days,
                                                              min_date=elem.date - self.__count_predictions_days
                                                                                 - self.__count_analyze_days
@@ -148,17 +152,13 @@ class DataLoader:
                              random_state=self.config.dataloader.random_state)
         )
 
-        nice_print(text=f"Валидных объектов: {len(valid_arr)}/{len(arr)}",
-                   suffix='', suffix2='-')
+        logger.info(f"Валидных объектов: {len(valid_arr)}/{len(arr)}")
 
-        nice_print(text=f"Тренировочных объектов: {len(self.__arrays[self.ArrayTypes.train])}/{len(valid_arr)}",
-                   suffix='', suffix2='-')
+        logger.info(f"Тренировочных объектов: {len(self.__arrays[self.ArrayTypes.train])}/{len(valid_arr)}")
 
-        nice_print(text=f"Валидационных объектов: {len(self.__arrays[self.ArrayTypes.validate])}/{len(valid_arr)}",
-                   suffix='', suffix2='-')
+        logger.info(f"Валидационных объектов: {len(self.__arrays[self.ArrayTypes.validate])}/{len(valid_arr)}")
 
-        nice_print(text=f"Тестовых объектов: {len(self.__arrays[self.ArrayTypes.test])}/{len(valid_arr)}",
-                   suffix='', suffix2='-')
+        logger.info(f"Тестовых объектов: {len(self.__arrays[self.ArrayTypes.test])}/{len(valid_arr)}")
 
     def save_pickle(self) -> None:
         """

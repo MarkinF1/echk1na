@@ -282,123 +282,6 @@ def big_refactor():
         def asdict(self):
             return {attr: self.__getattribute__(attr) for attr in self.__dict__}
 
-    #
-    # class SmartContainer:
-    #     def __init__(self, direction: int, unit: int):
-    #         self.direction = direction
-    #         self.unit = unit
-    #
-    #         self.batches: List[List[ValueObject]] = []
-    #         self.current_add_batch: List[ValueObject] = []
-    #
-    #     def add(self, elem: ValueObject) -> None:
-    #         if self.current_add_batch:
-    #             delay = elem.date - self.current_add_batch[-1].date
-    #             if not 0 <= delay.days <= 5:
-    #                 self.flush()
-    #
-    #         self.current_add_batch.append(elem)
-    #
-    #     def flush(self) -> None:
-    #         self.batches.append(self.current_add_batch)
-    #         self.current_add_batch = []
-    #
-    #     def interpolate(self, num_days: int = 5, num_hours: int = 15):
-    #         """
-    #         Выполняет flush, а после аппроксимацию где разница дней меньше num_days.
-    #         :param num_days: максимальное количество дней для аппроксимации.
-    #         :return:
-    #         """
-    #         self.flush()
-    #         for l in range(len(self.batches)):
-    #             batch = self.batches[l]
-    #             if len(batch) < 4:
-    #                 continue
-    #
-    #             batch.sort(key=lambda x: x.date)
-    #             date_arr = [time.mktime(value_object.date.timetuple()) for value_object in batch]
-    #             value_arr = [value_object.value for value_object in batch]
-    #
-    #             splain = interpolate.splrep(date_arr, value_arr)
-    #
-    #             new_batches = []
-    #             step_unix = 60 * 60 * num_hours
-    #             for i in range(1, len(batch)):
-    #                 value_object_old = batch[i - 1]
-    #                 value_object_next = batch[i]
-    #                 new_batches.append(value_object_old)
-    #                 t: timedelta = value_object_next.date - value_object_old.date
-    #                 if 0 < t.days < num_days:
-    #                     first_date_unix = time.mktime(value_object_old.date.timetuple())
-    #                     last_date_unix = time.mktime(value_object_next.date.timetuple())
-    #                     for i in range(int(first_date_unix + step_unix), int(last_date_unix), step_unix):
-    #                         new_value = copy(value_object_old)
-    #                         new_value.date = datetime.utcfromtimestamp(i)
-    #                         new_value.value = interpolate.splev(i, splain)
-    #                         new_batches.append(new_value)
-    #             new_batches.append(batch[-1])
-    #             self.batches[l] = new_batches
-    #
-    #     def delete_small_batches(self, num: int):
-    #         for i in range(len(self.batches) - 1, -1, -1):
-    #             if len(self.batches[i]) < num:
-    #                 self.batches.pop(i)
-    #
-    #     def __eq__(self, other):
-    #         return other.direction == self.direction and other.unit == self.unit
-    #
-    # class ContainerCtrl:
-    #     def __init__(self):
-    #         self.containers = [SmartContainer(direction=i, unit=j) for i in range(1, 4) for j in range(0, 3)]
-    #
-    #     def add_trains(self, dictionary: dict) -> None:
-    #         for arrays in dictionary.values():
-    #             for arr in arrays:
-    #                 for value_object in arr:
-    #                     value_object: ValueObject
-    #                     container = self.get_container(direction=value_object.direction, unit=value_object.unit)
-    #                     if container:
-    #                         container.add(value_object)
-    #                 self.flush_all()
-    #
-    #     def get_dict(self):
-    #         dictionary = {}
-    #         for container in self.containers:
-    #             for batch in container.batches:
-    #                 if batch:
-    #                     try:
-    #                         dictionary[batch[0].id_train].append(batch)
-    #                     except KeyError:
-    #                         dictionary[batch[0].id_train] = [batch]
-    #         return dictionary
-    #
-    #     def get_container(self, direction: int, unit: int) -> Optional[SmartContainer]:
-    #         for container in self.containers:
-    #             if container.direction == direction and container.unit == unit:
-    #                 return container
-    #         else:
-    #             print(f"ContainerCtrl: я не нашел контейнер с direction = {direction}, unit = {unit}")
-    #             return None
-    #
-    #     def flush_all(self) -> None:
-    #         for container in self.containers:
-    #             container.flush()
-    #
-    #     def interpolate(self, num_days: int = 5) -> None:
-    #         """
-    #         Выполняет кубическую интерполяцию для всех SmartControllers.
-    #         :param num_days: количество дней разрыва, если больше, то не выолняется
-    #         """
-    #         for container in self.containers:
-    #             container.interpolate(num_days=num_days)
-    #
-    #     def save(self) -> None:
-    #         pass
-    #
-    #     def delete_small_batches(self, num_elements: int):
-    #         for container in self.containers:
-    #             container.delete_small_batches(num_elements)
-
     def first_iteration():
         """
         Загрузка всех элементов в словарь,
@@ -493,20 +376,6 @@ def big_refactor():
                 new_arr.append(arr)
 
                 dictionary[id_train][id_point] = new_arr
-            # else:
-            #     yaml_file = YamlCreator()
-            #
-            #     for lst in dictionary.values():
-            #         for i in range(len(lst)):
-            #             lst[i] = lst[i].asdict()
-            #
-            #     yaml_file.add_parameter(name="dictionary", value=dictionary)
-            #     yaml_file.save(path="./", filename="cut_all_alarms.yml")
-            #     del yaml_file
-        #
-        # for lst in dictionary.values():
-        #     for i in range(len(lst)):
-        #         lst[i] = value(**lst[i])
 
     def third_iteration():
         """
@@ -549,40 +418,24 @@ def big_refactor():
                                 new_batches.append(value_object_old)
                                 t: timedelta = value_object_next.date - value_object_old.date
                                 if 0 < t.days < 5:
-                                    # start_idx = max(0, i - 2)
-                                    # end_idx = min(len(bbatch) - 1, i + 2)
-                                    # splain = interpolate.splrep(date_arr[start_idx: end_idx],
-                                    #                             value_arr[start_idx: end_idx])
-
                                     first_date_unix = time.mktime(value_object_old.date.timetuple())
                                     last_date_unix = time.mktime(value_object_next.date.timetuple())
-                                    # print(
-                                    #     f"time = {value_object_old.date}\n"
-                                    #     f"val = {interpolate.splev(time.mktime(value_object_old.date.timetuple()), splain)}")
-
                                     for l in range(int(first_date_unix + step_unix), int(last_date_unix), step_unix):
                                         new_value = copy(value_object_old)
                                         new_value.date = datetime.utcfromtimestamp(l)
                                         val = inter(x=date_arr, y=value_arr, x_val=l)
-                                        # val: np.ndarray = interpolate.splev(l, splain)
                                         if type(val) is not float:
-                                            # print(f"type(val)= {type(val)}\nval = {val} is not float")
                                             val = float(val)
                                             a = min(value_object_old.value, value_object_next.value)
                                             b = max(value_object_old.value, value_object_next.value)
                                             if not a <= val <= b:
-                                                print("Опа, хуитааааааааааааааааа")
+                                                print("Опа, ошибка, хз почему")
                                                 n = input()
-                                        # print(val)
                                         new_value.value = val
                                         new_batches.append(new_value)
 
                             new_batches.append(batch[-1])
                             batch.extend(new_batches)
-
-                            # fig, ax = plt.subplots()
-                            # ax.plot([vv.date for vv in new_batches], [vv.value for vv in new_batches])
-                            # plt.show()
 
                     batch.sort(key=lambda x: x.date)
 
@@ -607,10 +460,6 @@ def big_refactor():
                         (r[i - 1]["value"] > r[i - 1]["alarm4"] or r[i]["value"] > r[i]["alarm4"])):
                     o += 1
 
-                # Если происходит превышение по алармам3, то делаем сплит
-                elif (r[i - 1]["alarm3"] and r[i]["alarm3"] and
-                      (r[i - 1]["value"] > r[i - 1]["alarm3"] or r[i]["value"] > r[i]["alarm3"])):
-                    o += 1
                 r[i - 1] = EchkinaReadyTable(**r[i - 1])
 
             if r:

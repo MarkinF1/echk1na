@@ -1,5 +1,6 @@
 import torch
 
+from logger import logger
 from models.BaseModel import BaseModel
 from supporting import device, nice_print
 
@@ -55,7 +56,7 @@ class FullyConnectedNN(BaseModel):
         for a, b in sizes:
             self.linear_layers.append(torch.nn.Linear(a, b).to(device()))
 
-        nice_print(text=f"INFO: FullyConnectedNN has {len(self.linear_layers)} layers.", suffix='-')
+        logger.info(f"INFO: FullyConnectedNN has {len(self.linear_layers)} layers.")
 
     def forward(self, x: torch.tensor, *args):
         if len(args) != self.param_count:

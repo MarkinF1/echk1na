@@ -1,12 +1,12 @@
-import datetime
 import os
-
+import datetime
 import torch.cuda
+
+from torch import optim, nn
 from typing import Optional
 from collections import namedtuple
 
-from torch import optim, nn
-
+from logger import logger
 
 database_name = "echkina"
 
@@ -116,8 +116,7 @@ def get_optimizer(model_parameters, off_print: bool = False):
     """
     config = Config.getInstance()
 
-    nice_print(text=f"Создание оптимизатора {config.model.optimizer}", suffix='', suffix2='-',
-               off=off_print)
+    logger.debug(text=f"Создание оптимизатора {config.model.optimizer}.")
     if not hasattr(optim, config.model.optimizer):
         print(f"Error: не нашел optimizer {config.model.optimizer} в optim.")
         exit(-1)
@@ -135,8 +134,7 @@ def get_loss_function(off_print: bool = False):
     """
     config = Config.getInstance()
 
-    nice_print(text=f"Создание функции потерь {config.model.loss_function}", suffix='', suffix2='-',
-               off=off_print)
+    logger.debug(text=f"Создание функции потерь {config.model.loss_function}.")
     if not hasattr(nn, config.model.loss_function):
         print(f"Error: не нашел loss_function {config.model.loss_function} в torch.nn.")
         exit(-1)
@@ -180,23 +178,28 @@ def load_model(checkpoint_path: str):
     return save_obj(**torch.load(checkpoint_path))
 
 
-def nice_print(text: str, num: int = 40, suffix: str = '*', suffix2: Optional[str] = None, off=False) -> None:
+def nice_print(text: str, num: int = 40, prefix: str = '*',
+               postfix: Optional[str] = None, off=False, log_fun=None) -> None:
     """
     Красивый вывод.
     :param text: текст вывода
     :param num: количество символов до и после
-    :param suffix: символ до текста
-    :param suffix2: символ после текста
+    :param prefix: символ до текста
+    :param postfix: символ после текста
     :param off: выключение вывода
+    :param log_fun: функция для вывода текста
     """
     if off:
         return
 
-    if suffix2 is None:
-        suffix2 = suffix
-    print(suffix * num)
-    print(text)
-    print(suffix2 * num)
+    if postfix is None:
+        postfix = prefix
+
+    if log_fun is None:
+        log_fun = print
+
+    text = f"{prefix * num}\n{text}\n{postfix * num}"
+    log_fun(text)
 
 
 def date2str(date: datetime.date) -> str:

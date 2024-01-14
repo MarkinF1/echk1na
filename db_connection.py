@@ -235,8 +235,8 @@ class DataBase:
             output.sort(key=lambda x: (x.arr_idx, x.date))
             return output
 
-    def get_ready_data_special(self, id_train: int, max_date: datetime.datetime, min_date: datetime.datetime,
-                               arr_idx: Optional[int] = None) -> List[EchkinaReadyTable]:
+    def get_ready_data_special(self, id_train: int, unit: int, direction: int, max_date: datetime.datetime,
+                               min_date: datetime.datetime, arr_idx: Optional[int] = None) -> List[EchkinaReadyTable]:
         """
         Возвращает данные подходящие под параметры обучения.
         :param id_train: id насоса
@@ -246,9 +246,13 @@ class DataBase:
         :return: спискок элемнтов
         """
         with self.session() as session:
-            condition = and_(EchkinaReadyTable.id_train == id_train,
-                             EchkinaReadyTable.date <= max_date,
-                             EchkinaReadyTable.date >= min_date)
+            condition = and_(
+                EchkinaReadyTable.id_train == id_train,
+                EchkinaReadyTable.unit == unit,
+                EchkinaReadyTable.direction == direction,
+                EchkinaReadyTable.date <= max_date,
+                EchkinaReadyTable.date >= min_date
+            )
             if arr_idx is not None:
                 condition = and_(condition, EchkinaReadyTable.arr_idx == arr_idx)
             result = session.query(EchkinaReadyTable).filter(condition).order_by(EchkinaReadyTable.date).all()

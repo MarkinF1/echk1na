@@ -4,6 +4,7 @@ import torch
 from typing import Union
 from argparse import ArgumentParser
 
+import logger
 from dataloader import DataLoader
 from models.LSTMModel import LSTMModel
 from models.FullConnectedModel import FullyConnectedNN

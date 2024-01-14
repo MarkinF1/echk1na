@@ -1,9 +1,6 @@
 import os
-from collections import namedtuple
-from logging import getLogger
+from logger import logger
 from typing import Union, Optional
-
-logger = getLogger(__name__)
 
 
 class YamlCreator(object):
