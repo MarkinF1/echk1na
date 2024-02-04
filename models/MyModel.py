@@ -79,7 +79,8 @@ class MyChildModel:
             model_param_string = '_'.join(list(map(str, self.config.__getattribute__(model_type)._asdict().values())))
             graphic_wandb = wandb.init(
                           name=self.config.wandb.name.format(model_type, model_param_string,
-                                                             self.config.model.optimizer, self.unit, self.direction),
+                                                             self.config.model.optimizer, self.args.analyze_days,
+                                                             self.args.prediction_days),
                           project=self.config.wandb.project.format(self.unit, self.direction),
                           config={"epochs": self.config.model.epoch, "lr": self.config.model.lr})
 

@@ -27,8 +27,18 @@ main:
   # отключить обработку определенной пары (unit, direction)
   off_unit_direction:
     -
+      - 0
       - 1
+    -
+      - 0
       - 2
+    -
+      - 0
+      - 3
+    -
+      - 1
+      - 1
+
   # Путь для модели загрузки
   checkpoint_save: {}
 
@@ -47,13 +57,13 @@ model:
   # Функция потерь
   loss_function: MSELoss # [L1Loss, MSELoss, CrossEntropyLoss] get from nn. ...
   # Максимальное количество эпох
-  epoch: 600
+  epoch: 1000
   # Начальный шаг обучения
   lr: 0.00001
   # Измненине шага обучения (умножение на заданное число)
   lr_decay: 0.5
   # Шаг изменения
-  lr_step: 300
+  lr_step: 250
 
 # Настройки
 settings:
@@ -68,11 +78,11 @@ settings:
 
 # Настройка wandb
 wandb:
-  turn_on: True
+  turn_on: False
   # Название проекта
   project: "echkina_unit{0}_direction{1}"
   # Имя запуска
-  name: "echkina_{0}_{1}_{2}_model_unit_{3}_direction_{4}"
+  name: "echkina_{0}_{1}_{2}_model_analyze_{3}_prediction_{4}"
 
 # Настройка полносвязной модели
 fully_model:
