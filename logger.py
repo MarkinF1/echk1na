@@ -9,17 +9,16 @@ class CustomFormatter(logging.Formatter):
     bold_red = "\x1b[31;1m"
     reset = "\x1b[0m"
 
-    def __init__(self):
+    def __init__(self, fmt):
         super().__init__()
         self.datefmt = '%d-%m-%Y %H:%M:%S'
-        format = "[%(asctime)s] [%(levelname)s] [(%(filename)s:%(lineno)d)]\n%(message)s"
-        self.fmt = format
+        self.fmt = fmt
         self.FORMATS = {
-            logging.DEBUG: self.grey + format + self.reset,
-            logging.INFO: self.grey + format + self.reset,
-            logging.WARNING: self.yellow + format + self.reset,
-            logging.ERROR: self.red + format + self.reset,
-            logging.CRITICAL: self.bold_red + format + self.reset
+            logging.DEBUG: self.grey + self.fmt + self.reset,
+            logging.INFO: self.grey + self.fmt + self.reset,
+            logging.WARNING: self.yellow + self.fmt + self.reset,
+            logging.ERROR: self.red + self.fmt + self.reset,
+            logging.CRITICAL: self.bold_red + self.fmt + self.reset
         }
 
     def format(self, record):
@@ -29,11 +28,13 @@ class CustomFormatter(logging.Formatter):
 
 
 logging_lvl = logging.DEBUG
+format = ("[%(asctime)s] [%(levelname)s] " +
+          ("[(%(filename)s:%(lineno)d)]" if logging_lvl == logging.DEBUG else "") + "\n%(message)s")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging_lvl)
 handlers = (logging.FileHandler('output.log'), logging.StreamHandler())
 for hand in handlers:
     hand.setLevel(logging_lvl)
-    hand.setFormatter(CustomFormatter())
+    hand.setFormatter(CustomFormatter(format))
     logger.addHandler(hand)
 

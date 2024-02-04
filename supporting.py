@@ -116,7 +116,7 @@ def get_optimizer(model_parameters, off_print: bool = False):
     """
     config = Config.getInstance()
 
-    logger.debug(text=f"Создание оптимизатора {config.model.optimizer}.")
+    logger.debug(f"Создание оптимизатора {config.model.optimizer}.")
     if not hasattr(optim, config.model.optimizer):
         print(f"Error: не нашел optimizer {config.model.optimizer} в optim.")
         exit(-1)
@@ -134,7 +134,7 @@ def get_loss_function(off_print: bool = False):
     """
     config = Config.getInstance()
 
-    logger.debug(text=f"Создание функции потерь {config.model.loss_function}.")
+    logger.debug(f"Создание функции потерь {config.model.loss_function}.")
     if not hasattr(nn, config.model.loss_function):
         print(f"Error: не нашел loss_function {config.model.loss_function} в torch.nn.")
         exit(-1)
@@ -242,14 +242,17 @@ def device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def make_input_tensor(x) -> torch.Tensor:
+def make_input_tensor(x, normalize_on: bool = True) -> torch.Tensor:
     """
     Создание тензора из массива х.
     :param x: массив данных
+    :param normalize_on: нормализовывать тензор или нет
     :return: нормализованный тензор
     """
     x = torch.tensor(x, dtype=torch.float32).to(device())
-    mean = torch.mean(x)
-    std = torch.std(x)
-    x = (x - mean) / std
+    if normalize_on:
+        mean = torch.mean(x)
+        std = torch.std(x)
+        x = (x - mean) / std
+
     return x

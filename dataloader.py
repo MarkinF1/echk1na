@@ -50,6 +50,7 @@ class DataLoader:
 
             self.__database = DataBase(database=database)
             self.__instance[database] = self
+            logger.info(f"Для DataLoader(database={database}) длина батча {self.get_len_batch()}.")
 
     @classmethod
     def getInstance(cls, database: str):
@@ -235,6 +236,9 @@ class DataLoader:
 
     def __next__(self):
         return self.__arrays[self.__current_array_type].__next__()
+
+    def __len__(self):
+        return self.__arrays[self.__current_array_type].__len__()
 
     def train(self) -> None:
         """

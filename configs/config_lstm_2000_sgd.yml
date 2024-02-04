@@ -25,10 +25,7 @@ main:
   # последний direction
   direction_last: 3
   # отключить обработку определенной пары (unit, direction)
-  off_unit_direction:
-    -
-      - 1
-      - 2
+  off_unit_direction: []
   # Путь для модели загрузки
   checkpoint_save: {}
 
@@ -47,13 +44,13 @@ model:
   # Функция потерь
   loss_function: MSELoss # [L1Loss, MSELoss, CrossEntropyLoss] get from nn. ...
   # Максимальное количество эпох
-  epoch: 600
+  epoch: 1000
   # Начальный шаг обучения
   lr: 0.00001
   # Измненине шага обучения (умножение на заданное число)
   lr_decay: 0.5
   # Шаг изменения
-  lr_step: 300
+  lr_step: 250
 
 # Настройки
 settings:

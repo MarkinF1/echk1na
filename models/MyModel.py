@@ -46,19 +46,19 @@ class MyChildModel:
         if (self.config.main.off_load_pickle_for_unit_direction is None or
                 [self.unit, self.direction] not in self.config.main.off_load_pickle_for_unit_direction):
             if os.path.exists(path.format(self.unit, self.direction)):
-                logger.info(text=f"Нашел дамп валидных объектов для unit {self.unit} и direction {self.direction}.")
+                logger.info(f"Нашел дамп валидных объектов для unit {self.unit} и direction {self.direction}.")
                 print("Загружаю дамп...", end="\r")
                 dataloader.load_pickle(self.unit, self.direction, path)
                 print("Дамп загружен.\n", end="\r")
             else:
-                logger.info(text=f"Дамп валидных объектов для analyze {self.args.analyze_days}, prediction "
-                                f"{self.args.prediction_days}, unit {self.unit} и direction {self.direction} не найден."
-                                f" Dataloader устанавливает массивы для обучения.")
+                logger.info(f"Дамп валидных объектов для analyze {self.args.analyze_days}, prediction "
+                            f"{self.args.prediction_days}, unit {self.unit} и direction {self.direction} не найден."
+                            f" Dataloader устанавливает массивы для обучения.")
                 dataloader.set_unit_direction(self.unit, self.direction)
                 dataloader.save_pickle()
         else:
-            logger.info(text=f"Дамп валидных объектов для unit {self.unit} и direction {self.direction} запрещен к "
-                            f"загрузке. Запускаюсь с пустым массивом валидных объектов.")
+            logger.info(f"Дамп валидных объектов для unit {self.unit} и direction {self.direction} запрещен к "
+                        f"загрузке. Запускаюсь с пустым массивом валидных объектов.")
             dataloader.set_unit_direction(self.unit, self.direction)
             dataloader.save_pickle()
         return dataloader
@@ -74,7 +74,6 @@ class MyChildModel:
         train_arr = self.__load_valid_objects(path=valid_save_path)
 
         # Настройка вспомогательных параметров
-        epoch_time = time()
         if self.config.wandb.turn_on:
             model_type = self.config.model.tp
             model_param_string = '_'.join(list(map(str, self.config.__getattribute__(model_type)._asdict().values())))
@@ -87,17 +86,22 @@ class MyChildModel:
         logger.info("Начинаю обучение.")
         start_epoch = self.epoch
         logger.info("Эпоха: ")
-        for self.epoch in tqdm.tqdm(range(start_epoch, self.config.model.epoch)):
+        for epoch in tqdm.tqdm(range(start_epoch, self.config.model.epoch)):
+            self.epoch = epoch
             self.model.train()
             train_arr.train()
+            epoch_loss = 0
+            count_inf_data = 0
 
-            sum_loss = 0
-            count = 0
             for i, (x, y, target) in enumerate(train_arr):
-                count += 1
                 self.optim.zero_grad()
-                output = self.model(x, target.param1, target.param2)
 
+                if torch.any(torch.isinf(x)):
+                    count_inf_data += 1
+                    # print(f"INF values found in output: {x}, target: {vars(target)}")
+                    continue
+
+                output = self.model(x, target.param1, target.param2)
                 loss = self.loss_fun(output, y)
                 loss.backward()
                 self.optim.step()
@@ -105,18 +109,22 @@ class MyChildModel:
                 if self.config.settings.print_predict and i % self.config.settings.print_predict_step == 0:
                     logger.debug(f"model.predict: {output}\ntarget:{y}\nloss: {loss.item()}")
 
-                sum_loss += loss.item()
+                epoch_loss += loss.item() / len(train_arr)
+                if epoch_loss is None:
+                    input()
 
-            if not count:
+            if count_inf_data and self.epoch == start_epoch:
+                logger.debug(f"Найдено {count_inf_data} тензора с бесконечными значениями из {len(train_arr)}.")
+
+            if not len(train_arr):
                 logger.warning(f"Не нашел валидных объектов для unit {self.unit}, direction {self.direction}. "
-                      f"Продолжить [y/n]?")
+                               f"Продолжить [y/n]?")
                 n = input()
                 if n == 'y':
                     break
                 else:
                     exit(-1)
 
-            epoch_loss = sum_loss / count
             if self.config.wandb.turn_on:
                 try:
                     wandb.log({"train_loss": epoch_loss, "epoch": self.epoch})
@@ -144,19 +152,17 @@ class MyChildModel:
         dataloader.validate()
 
         with torch.no_grad():
-            sum_loss = 0
-            count = 0
+            epoch_loss = 0
             for i, (x, y, target) in enumerate(dataloader):
-                count += 1
                 output = self.model(x, target.param1, target.param2)
                 loss = self.loss_fun(output, y)
 
                 if self.config.settings.print_predict and i % self.config.settings.print_predict_step == 0:
                     print(f"model.predict: {output}\ntarget:{y}\nloss: {loss.item()}")
 
-                sum_loss += loss.item()
+                epoch_loss += loss.item() / len(dataloader)
 
-            if not count:
+            if not len(dataloader):
                 print(f"Не нашел валидных объектов для unit {self.unit}, direction {self.direction}. "
                       f"Продолжить [y/n]?")
                 n = input()
@@ -165,7 +171,6 @@ class MyChildModel:
                 else:
                     exit(-1)
 
-            epoch_loss = sum_loss / count
             if self.config.wandb.turn_on:
                 try:
                     wandb.log({"valid_loss": epoch_loss})
@@ -192,22 +197,20 @@ class MyChildModel:
 
         with torch.no_grad():
             losses = []
-            count = 0
             for x, y, objects, target, i, num in tqdm.tqdm(dataloader):
-                count += 1
                 output = self.model(x, target.param1, target.param2)
                 loss = self.loss_fun(output, y)
                 loss.backward()
                 losses.append(loss.item())
 
-            epoch_loss = sum(losses) / count
+            epoch_loss = sum(losses) / len(dataloader)
 
         nice_print(text=f"Ошибка на тестовом наборе: {epoch_loss}.\nМаксимальная ошибка: {max(losses)}.\n"
                         f"Минимальная ошибка: {min(losses)}.", prefix='=', log_fun=logger.info)
 
     def predict(self, x: torch.Tensor, param1, param2) -> None:
         y = self.model(x, param1, param2)
-        logger.info(text=f"Unit: {self.unit}, direction: {self.direction}, предсказание: {y}.")
+        logger.info(f"Unit: {self.unit}, direction: {self.direction}, предсказание: {y}.")
 
     def save(self) -> None:
         temp = save_obj(model=self.model,
@@ -269,7 +272,7 @@ class MyModel:
                     try:
                         row[i] = int(row[i])
                     except Exception as exp:
-                        logger.exception(text=f"Не смог преобразовать {type(row[i])} в int. Exception: {exp}")
+                        logger.exception(f"Не смог преобразовать {type(row[i])} в int. Exception: {exp}")
             #for i in range(6):
             #    if row[i] != "":
             #        row[i] = int(row[i])
@@ -354,7 +357,7 @@ class MyModel:
         Загрузка или создание моделей.
         """
         def create_new_model():
-            logger.debug(text=f"Unit - {unit}, direction - {direction}: Создание модели {self.__model_type}")
+            logger.debug(f"Unit - {unit}, direction - {direction}: Создание модели {self.__model_type}")
             if self.__create_model_fun is None:
                 print("Функция создания модели None. Модель не будет создана.")
                 return
@@ -367,7 +370,7 @@ class MyModel:
                                                                                  loss_fun=loss_function,
                                                                                  unit=unit, direction=direction)
 
-        logger.info(text="Загрузка и создание моделей.")
+        logger.info("Загрузка и создание моделей.")
         dictionary = self.config.main.checkpoint_save
         units_directions = [(unit, direction)
                             for unit in range(self.config.main.unit_start,
