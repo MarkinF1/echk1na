@@ -97,7 +97,7 @@ class MyChildModel:
             for i, (x, y, target) in enumerate(train_arr):
                 self.optim.zero_grad()
 
-                if torch.any(torch.isinf(x)):
+                if torch.any(torch.isinf(x)) or torch.any(torch.isnan(x)):
                     count_inf_data += 1
                     # print(f"INF values found in output: {x}, target: {vars(target)}")
                     continue
