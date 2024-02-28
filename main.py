@@ -66,15 +66,13 @@ def test() -> None:
     raise NotImplementedError
 
 
-def eval() -> None:
+def predict() -> None:
     """
     Функция для предсказания на определенную дату
     """
 
-    args = Args.getInstance()
-    config = Config.getInstance()
-
-    raise NotImplementedError
+    model = MyModel(create_model_fun=None)
+    model.predict()
 
 
 def get_days_which_can_predict() -> None:
@@ -112,25 +110,31 @@ def main() -> None:
     functions = {
         "train": train,
         "test": test,
-        "eval": eval,
+        "predict": predict,
         "valid": get_days_which_can_predict
     }
 
     parser = ArgumentParser(description="Описание программы")
 
-    parser.add_argument("-m", "--method", type=str, default="eval", choices=list(functions.keys()),
+    parser.add_argument("-m", "--method", type=str, default="predict", choices=list(functions.keys()),
                         help="Способ работы программы: тренировка (train), тестирование (test), проверка конкретного "
                              "варианта (eval) и вывод валидных дат для конкретного train_id (valid).")
     parser.add_argument("-p", "--prediction_days", type=int, choices=[3, 14],
                         help="На сколько дней вперед вы хотите предсказать.")
     parser.add_argument("-a", "--analyze_days", type=int,
                         help="Сколько дней взять для анализа.")
-    parser.add_argument("-c", "--config", type=str, help="Установка конкретного конфига программы.")
+    parser.add_argument("-c", "--config", type=str,
+                        help="Установка конкретного конфига программы.")
     parser.add_argument("-i", "--id_train", type=int, default=None,
                         help="Id насоса.")
     parser.add_argument("-d", "--date", type=str, default=None,
                         help="Дата на которую нужно совершить предсказание.")
-    parser.add_argument("-f", "--file", type=str, default=None, help="Файл данных формата csv.")
+    parser.add_argument("-t", "--type", type=str, default="db", choices=["csv", "db"],
+                        help="Тип данных для предсказания.")
+    parser.add_argument("-f", "--file", type=str, default=None,
+                        help="Файл данных формата csv.")
+    parser.add_argument("-b", "--base", type=str, default="echkina",
+                        help="Название базы данных для предсказания.")
 
     args = Args(**vars(parser.parse_args()))
     with open(args.config, "r") as file:

@@ -1,8 +1,10 @@
+from typing import Optional
+
 import torch
 
 from logger import logger
 from models.BaseModel import BaseModel
-from supporting import device, nice_print
+from supporting import device, isValidTensor
 
 
 class FullyConnectedNN(BaseModel):
@@ -58,19 +60,22 @@ class FullyConnectedNN(BaseModel):
 
         logger.info(f"INFO: FullyConnectedNN has {len(self.linear_layers)} layers.")
 
-    def forward(self, x: torch.tensor, *args):
+    def forward(self, input_: torch.Tensor, *args) -> Optional[torch.Tensor]:
+        if not isValidTensor(input_):
+            return None
+
         if len(args) != self.param_count:
             print(f"[ERROR] {self.__class__.__name__}.forward: не совпадает количество "
                   f"дополнительных параметров в args.")
             exit(1)
 
-        x = x.to(device())
+        input_ = input_.to(device())
         if args:
             params = torch.tensor(args, dtype=torch.float32).to(device())
-            x = torch.concat([params, x])
+            input_ = torch.concat([params, input_])
         
         for layer in self.linear_layers[:-1]:
-            x = torch.relu(layer(x))
+            input_ = torch.relu(layer(input_))
         
-        x = self.linear_layers[-1](x)
-        return x
+        input_ = self.linear_layers[-1](input_)
+        return input_

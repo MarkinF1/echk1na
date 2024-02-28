@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 from logger import logger
 from db_connection import DataBase
 from db_classes import EchkinaReadyTableCrop
-from supporting import nice_print, device, make_input_tensor, Config, database_name
+from supporting import nice_print, device, make_input_tensor, Config, database_name, Args
 
 
 class DataLoader:
@@ -28,6 +28,7 @@ class DataLoader:
         test = "test"
 
     __instance = {}
+    __count_points = 2
 
     def __init__(self, count_predictions_days: int = 3, count_analyze_days: int = 10, count_directions: int = 3,
                  count_units: int = 3, database: str = database_name):
@@ -38,7 +39,6 @@ class DataLoader:
             self.__count_directions: int = count_directions
             self.__count_units: int = count_units
 
-            self.__count_points = 2
             self.__current_array_type: str = self.ArrayTypes.train
             self.__current_unit: Optional[int] = None
             self.__current_direction: Optional[int] = None
@@ -77,7 +77,8 @@ class DataLoader:
                 and self.__current_direction in range(Config.getInstance().main.direction_start,
                                                       Config.getInstance().main.direction_last + 1))
 
-    def __convert_days2count_values(self, days: int) -> int:
+    @classmethod
+    def __convert_days2count_values(cls, days: int) -> int:
         """
         Конвертирует дни в количество данных, которое там должно быть.
         :param days: дни
@@ -86,15 +87,16 @@ class DataLoader:
         # Использовал сначала это, но данные слишком расплывчаты, это не подойдет
         # in_one_day = self.__count_directions * self.__count_units * self.__count_points
         # count = int(days * 1.5) * in_one_day
-        count = self.__count_points * int(days * 1.5)
+        count = cls.__count_points * int(days * 1.5)
         return count
 
-    def get_len_batch(self) -> int:
+    @classmethod
+    def get_len_batch(cls) -> int:
         """
         Возвращает длину батча необходимого для обучения.
         :return: длина батча
         """
-        return self.__convert_days2count_values(self.__count_analyze_days.days)
+        return cls.__convert_days2count_values(Args.getInstance().analyze_days)
 
     def set_unit_direction(self, unit: int, direction: int) -> None:
         """

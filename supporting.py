@@ -19,7 +19,7 @@ class Args:
     """
     instance = None
 
-    def __init__(self, method, prediction_days, analyze_days, config, id_train, date, file):
+    def __init__(self, method, prediction_days, analyze_days, config, id_train, date, type, file, base):
         if Args.instance is None:
             self.method: str = method
             self.prediction_days: int = prediction_days
@@ -29,7 +29,9 @@ class Args:
             self.date: Optional[datetime.date] = None
             if date:
                 self.date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
-            self.file = file
+            self.type_: str = type
+            self.file: Optional[str] = file
+            self.base: str = base
             Args.instance = self
 
     @classmethod
@@ -211,6 +213,15 @@ def date2str(date: datetime.date) -> str:
     return date.strftime("%Y-%m-%d")
 
 
+def str2date(date: str) -> datetime.date:
+    """
+    Перевод строки в дату.
+    :param date: дата в формате строки
+    :return: дата
+    """
+    return datetime.datetime.strptime(date, "%Y-%m-%d").date()
+
+
 def get_time(time) -> str:
     """
     Перевод числа во время
@@ -256,3 +267,7 @@ def make_input_tensor(x, normalize_on: bool = True) -> torch.Tensor:
         x = (x - mean) / std
 
     return x
+
+
+def isValidTensor(x: torch.Tensor) -> bool:
+    return not (torch.any(torch.isinf(x)) or torch.any(torch.isnan(x)))

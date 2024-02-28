@@ -3,7 +3,7 @@
 # Общие настройки
 main:
   # Директория для сохранения чекпоинтов моделей
-  checkpoint_save_dir: "./checkpoints_lstm_2000_adam/"
+  checkpoint_save_dir: "./checkpoints_lstm_500_adam/"
   # Название чекпоинтов
   checkpoint_string: "model_a{0}_p{1}_u{2}_d{3}_epoch{4}.pth"
   # Максимальное количество чекпоинтов
@@ -38,6 +38,9 @@ main:
     -
       - 1
       - 1
+    -
+      - 1
+      - 2
 
   # Путь для модели загрузки
   checkpoint_save: {}
@@ -90,4 +93,4 @@ fully_model:
 
 # Настройка модели временного ряда
 lstm_model:
-  hidden_size: 2000
+  hidden_size: 500

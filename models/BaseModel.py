@@ -1,3 +1,6 @@
+from typing import Optional
+
+import torch
 from torch import nn
 
 
@@ -7,5 +10,5 @@ class BaseModel(nn.Module):
     def __init__(self, *args, **kwargs):
         super(BaseModel, self).__init__(*args, **kwargs)
 
-    def forward(self, x, *args):
+    def forward(self, input_: torch.Tensor, *args) -> Optional[torch.Tensor]:
         ...

@@ -1,18 +1,17 @@
 ---
-
 # Общие настройки
 main:
   # Директория для сохранения чекпоинтов моделей
-  checkpoint_save_dir: "./checkpoints_lstm_2000_adam/"
+  checkpoint_save_dir:
   # Название чекпоинтов
-  checkpoint_string: "model_a{0}_p{1}_u{2}_d{3}_epoch{4}.pth"
+  checkpoint_string:
   # Максимальное количество чекпоинтов
-  max_count_checkpoint: 10
+  max_count_checkpoint:
 
   # Директория для сохранения валидных объектов
-  valid_objects_save_dir: "./pickle_dumps_valid_train/"
+  valid_objects_save_dir:
   # Название файла с валидными объектами
-  valid_objects_string: "dump_random{0}_a{1}_p{2}_u{3}_d{4}.pl"
+  valid_objects_string:
   # Отключить загрузку файлов валидных объектов для определенной пары (unit, direction)
   off_load_pickle_for_unit_direction: []
 
@@ -25,45 +24,42 @@ main:
   # последний direction
   direction_last: 3
   # отключить обработку определенной пары (unit, direction)
-  off_unit_direction:
-    -
-      - 0
-      - 1
-    -
-      - 0
-      - 2
-    -
-      - 0
-      - 3
-    -
-      - 1
-      - 1
+  off_unit_direction: []
 
   # Путь для модели загрузки
-  checkpoint_save: {}
+  checkpoint_save:
+    (0, 1): "./checkpoints_fully_10_adam/model_a5_p3_u0_d1_epoch581.pth"
+    (0, 2): "./checkpoints_lstm_2000_adam/model_a5_p3_u0_d2_epoch999.pth"
+    (0, 3): "./checkpoints_lstm_2000_adam/model_a5_p3_u0_d3_epoch440.pth"
+    (1, 1): "./checkpoints_lstm_2000_adam/model_a5_p3_u1_d1_epoch999.pth"
+    (1, 2): "./checkpoints_lstm_2000_adam/model_a5_p3_u1_d2_epoch251.pth"
+    (1, 3): "./checkpoints_lstm_500_adam/model_a5_p3_u1_d3_epoch999.pth"
+    (2, 1): "./checkpoints_lstm_500_adam/model_a5_p3_u2_d1_epoch999.pth"
+    (2, 2): "./checkpoints_lstm_500_adam/model_a5_p3_u2_d2_epoch999.pth"
+    (2, 3): "./checkpoints_lstm_500_adam/model_a5_p3_u2_d3_epoch999.pth"
 
 dataloader:
   # valid_size определяется автоматически
-  test_size: 0.1
-  train_size: 0.7
+  test_size:
+  train_size:
   random_state: 25
 
 # Настройки модели
 model:
   # Тип модели
-  tp: lstm_model # [lstm_model, fully_model]
+  tp:
   # Оптимизатор
-  optimizer: Adam # [Adam, SGD] get from optim. ....
+  optimizer:
   # Функция потерь
-  loss_function: MSELoss # [L1Loss, MSELoss, CrossEntropyLoss] get from nn. ...
+  loss_function:
   # Максимальное количество эпох
-  epoch: 1000
+  epoch:
   # Начальный шаг обучения
-  lr: 0.00001
+  lr:
   # Измненине шага обучения (умножение на заданное число)
-  lr_decay: 0.5
+  lr_decay:
   # Шаг изменения
-  lr_step: 250
+  lr_step:
 
 # Настройки
 settings:
@@ -78,11 +74,11 @@ settings:
 
 # Настройка wandb
 wandb:
-  turn_on: True
+  turn_on: False
   # Название проекта
-  project: "echkina_unit{0}_direction{1}"
+  project:
   # Имя запуска
-  name: "echkina_{0}_{1}_{2}_model_analyze_{3}_prediction_{4}"
+  name:
 
 # Настройка полносвязной модели
 fully_model:
@@ -90,4 +86,4 @@ fully_model:
 
 # Настройка модели временного ряда
 lstm_model:
-  hidden_size: 2000
+  hidden_size: 500

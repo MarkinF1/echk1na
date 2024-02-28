@@ -2,16 +2,16 @@ import os
 import csv
 import tqdm
 import torch
-import wandb
+#import wandb
 import datetime
-from time import time
 from typing import Optional, Dict, List
 
+from db_connection import DataBase
 from logger import logger
 from dataloader import DataLoader
 from db_classes import EchkinaReadyTable
-from supporting import Config, nice_print, get_time, Args, get_optimizer, get_loss_function, save_obj, database_name, \
-                        make_input_tensor
+from supporting import Config, nice_print, Args, get_optimizer, get_loss_function, save_obj, database_name, \
+    make_input_tensor, str2date
 
 
 class MyChildModel:
@@ -97,12 +97,11 @@ class MyChildModel:
             for i, (x, y, target) in enumerate(train_arr):
                 self.optim.zero_grad()
 
-                if torch.any(torch.isinf(x)) or torch.any(torch.isnan(x)):
+                output = self.model(x, target.param1, target.param2)
+                if output is None:
                     count_inf_data += 1
-                    # print(f"INF values found in output: {x}, target: {vars(target)}")
                     continue
 
-                output = self.model(x, target.param1, target.param2)
                 loss = self.loss_fun(output, y)
                 loss.backward()
                 self.optim.step()
@@ -115,7 +114,7 @@ class MyChildModel:
                     input()
 
             if count_inf_data and self.epoch == start_epoch:
-                logger.debug(f"Найдено {count_inf_data} тензора с бесконечными значениями из {len(train_arr)}.")
+                logger.debug(f"Train: Найдено {count_inf_data} тензора с бесконечными значениями из {len(train_arr)}.")
 
             if not len(train_arr):
                 logger.warning(f"Не нашел валидных объектов для unit {self.unit}, direction {self.direction}. "
@@ -154,14 +153,23 @@ class MyChildModel:
 
         with torch.no_grad():
             epoch_loss = 0
+            count_inf_data = 0
             for i, (x, y, target) in enumerate(dataloader):
                 output = self.model(x, target.param1, target.param2)
+                if output is None:
+                    count_inf_data += 1
+                    continue
+
                 loss = self.loss_fun(output, y)
 
                 if self.config.settings.print_predict and i % self.config.settings.print_predict_step == 0:
                     print(f"model.predict: {output}\ntarget:{y}\nloss: {loss.item()}")
 
                 epoch_loss += loss.item() / len(dataloader)
+
+            if count_inf_data and not self.epoch:
+                logger.debug(f"Validate: Найдено {count_inf_data} тензора с бесконечными "
+                             f"значениями из {len(dataloader)}.")
 
             if not len(dataloader):
                 print(f"Не нашел валидных объектов для unit {self.unit}, direction {self.direction}. "
@@ -198,20 +206,40 @@ class MyChildModel:
 
         with torch.no_grad():
             losses = []
+            count_inf_data = 0
             for x, y, objects, target, i, num in tqdm.tqdm(dataloader):
                 output = self.model(x, target.param1, target.param2)
+                if output is None:
+                    count_inf_data += 1
+                    continue
+
                 loss = self.loss_fun(output, y)
                 loss.backward()
                 losses.append(loss.item())
+
+            if count_inf_data:
+                logger.debug(f"Test: Найдено {count_inf_data} тензора с бесконечными значениями из {len(dataloader)}.")
 
             epoch_loss = sum(losses) / len(dataloader)
 
         nice_print(text=f"Ошибка на тестовом наборе: {epoch_loss}.\nМаксимальная ошибка: {max(losses)}.\n"
                         f"Минимальная ошибка: {min(losses)}.", prefix='=', log_fun=logger.info)
 
-    def predict(self, x: torch.Tensor, param1, param2) -> None:
-        y = self.model(x, param1, param2)
-        logger.info(f"Unit: {self.unit}, direction: {self.direction}, предсказание: {y}.")
+    def predict(self, x: torch.Tensor, param1, param2, alarm3 = None, alarm4 = None) -> None:
+        y: torch.Tensor = self.model(x, param1, param2)
+        if y is None:
+            logger.warning(f"Входные данные содержат ошибку! Tensor: {x}")
+            return
+
+        y = y[0]
+
+        status = "в пределах нормы"
+        if alarm3 is not None and y > alarm3:
+            status = "превышение по аларму 3 ({})".format(alarm3)
+        if alarm4 is not None and y > alarm4:
+            status = "превышение по аларму 4 ({})".format(alarm4)
+
+        logger.info(f"Unit: {self.unit}, direction: {self.direction}, предсказание: {y}, статус: {status}.")
 
     def save(self) -> None:
         temp = save_obj(model=self.model,
@@ -259,6 +287,19 @@ class MyModel:
             model.test()
 
     def predict(self):
+        id_train = self.args.id_train
+        date = self.args.date
+        if id_train is None or date is None:
+            print("Введите id насоса" if id_train is None else "",
+                  "Введите дату, на которую нужно предсказать" if date else "")
+            exit(0)
+
+        variants = {"csv": self.__predict_csv,
+                    "db": self.__predict_database
+                    }
+        variants[self.args.type_]()
+
+    def __predict_csv(self):
         def create_obj(row):
             headers = ["id", "id_train", "id_point", "id_measure", "direction", "unit", "date", "value",
                        "alarm3", "alarm4", "param1", "param2", "arr_idx"]
@@ -267,42 +308,19 @@ class MyModel:
                     row[i] = None
                 elif row[i].find(".") != -1:
                     row[i] = float(row[i])
-                elif row[i].split("-") == 2:
-                    datetime.datetime.strptime(row[i].split(' ')[0], "%Y-%m-%d").date()
+                elif len(row[i].split("-")) == 3:
+                    row[i] = str2date(row[i].split(' ')[0])
                 else:
                     try:
                         row[i] = int(row[i])
                     except Exception as exp:
                         logger.exception(f"Не смог преобразовать {type(row[i])} в int. Exception: {exp}")
-            #for i in range(6):
-            #    if row[i] != "":
-            #        row[i] = int(row[i])
-            #    else:
-            #        row[i] = None
-            #if row[6] != "":
-            #    row[6] = datetime.datetime.strptime(row[6].split(' ')[0], "%Y-%m-%d").date()
-            #else:
-            #    row[6] = None
-            #for i in range(7, 12):
-            #    if row[i] != "":
-            #        row[i] = float(row[i])
-            #    else:
-            #        row[i] = None
-            #if row[12] != "":
-            #    row[12] = int(row[12])
-            #else:
-            #    row[12] = None
             row = {key: val for key, val in zip(headers, row)}
             return EchkinaReadyTable(**row)
 
-        logger.debug(f"{self.name}: predict.")
-
+        logger.info(f"{self.name}: predict from csv file.")
         id_train = self.args.id_train
         date = self.args.date
-        if id_train is None or date is None:
-            print("Введите id насоса" if id_train is None else "",
-                  "Введите дату, на которую нужно предсказать" if date else "")
-            exit(0)
 
         max_date = date - datetime.timedelta(days=self.args.prediction_days)
         min_date = max_date - datetime.timedelta(days=self.args.analyze_days + 2)
@@ -313,30 +331,90 @@ class MyModel:
             for row in reader:
                 obj = create_obj(row)
 
-                if id_train == obj.id_train and min_date <= obj.date <= max_date:
-                    objects.append(obj)
+                if id_train == obj.id_train:
+                    if min_date <= obj.date <= max_date:
+                        objects.append(obj)
 
         objects.sort(key=lambda x: x.date)
         dataloader = DataLoader(count_predictions_days=self.args.prediction_days,
                                 count_analyze_days=self.args.analyze_days)
 
-        if dataloader.get_len_batch() > len(objects):
-            nice_print(text=f"Предсказание невозможно! Не хватает данных для предсказания. \n"
-                            f"Требуется: {dataloader.get_len_batch()}\nИмеется только: {len(objects)}",
-                       prefix='!', log_fun=logger.warning)
-            return
-
-        objects = objects[-dataloader.get_len_batch():]
-        values = [obj.value for obj in objects]
-        x = make_input_tensor(values)
         for model in self.__child_models.values():
-            param1, param2 = None, None
+            objects_unit_direction = [obj for obj in objects
+                                      if obj.unit == model.unit and obj.direction == model.direction]
+            if dataloader.get_len_batch() > len(objects_unit_direction):
+                nice_print(text=f"Предсказание для Unit - {model.unit}, Direction - {model.direction} невозможно! "
+                                f"Не хватает данных для предсказания.\n"
+                                f"Требуется: {dataloader.get_len_batch()}\nИмеется только: {len(objects_unit_direction)}",
+                           prefix='!', log_fun=logger.warning)
+                continue
+
+            objects_unit_direction = objects_unit_direction[-dataloader.get_len_batch():]
+            values = [obj.value for obj in objects_unit_direction]
+            x = make_input_tensor(values)
+
+            param1, param2, alarm3, alarm4 = None, None, None, None
+            for obj in objects_unit_direction:
+                if obj.unit == model.unit and obj.direction == model.direction:
+                    if param1 is None:
+                        param1 = obj.param1
+                    if param2 is None:
+                        param2 = obj.param2
+                    if alarm3 is None:
+                        alarm3 = obj.alarm3
+                    if alarm4 is None:
+                        alarm4 = obj.alarm4
+                if (param1 is not None and param2 is not None
+                        and alarm3 is not None and alarm4 is not None):
+                    break
+
+            model.predict(x, param1, param2, alarm3, alarm4)
+
+    def __predict_database(self):
+        logger.debug(f"{self.name}: predict from database {self.args.base}.")
+        id_train = self.args.id_train
+        date = self.args.date
+
+        max_date = date - datetime.timedelta(days=self.args.prediction_days)
+        min_date = max_date - datetime.timedelta(days=self.args.analyze_days + 2)
+
+        dataloader = DataLoader(count_predictions_days=self.args.prediction_days,
+                                count_analyze_days=self.args.analyze_days)
+
+        for model in self.__child_models.values():
+            objects = DataBase(database=self.args.base).get_ready_data_special(id_train=id_train,
+                                                                               unit=model.unit,
+                                                                               direction=model.direction,
+                                                                               max_date=max_date,
+                                                                               min_date=min_date)
+            objects.sort(key=lambda x: x.date)
+            if dataloader.get_len_batch() > len(objects):
+                nice_print(text=f"Предсказание для Unit - {model.unit}, Direction - {model.direction} невозможно! "
+                                f"Не хватает данных для предсказания.\n"
+                                f"Требуется: {dataloader.get_len_batch()}\nИмеется только: {len(objects)}",
+                           prefix='!', log_fun=logger.warning)
+                continue
+
+            objects = objects[-dataloader.get_len_batch():]
+            values = [obj.value for obj in objects]
+            x = make_input_tensor(values)
+
+            param1, param2, alarm3, alarm4 = None, None, None, None
             for obj in objects:
                 if obj.unit == model.unit and obj.direction == model.direction:
-                    param1 = obj.param1
-                    param2 = obj.param2
+                    if param1 is None:
+                        param1 = obj.param1
+                    if param2 is None:
+                        param2 = obj.param2
+                    if alarm3 is None:
+                        alarm3 = obj.alarm3
+                    if alarm4 is None:
+                        alarm4 = obj.alarm4
+                if (param1 is not None and param2 is not None
+                        and alarm3 is not None and alarm4 is not None):
+                    break
 
-            model.predict(x, param1, param2)
+            model.predict(x, param1, param2, alarm3, alarm4)
 
     def save(self, unit: Optional[int] = None, direction: Optional[int] = None) -> None:
         units = range(self.config.main.unit_start, self.config.main.unit_last + 1) if unit is None else [unit]

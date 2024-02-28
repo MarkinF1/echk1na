@@ -15,6 +15,11 @@ downloads/
 eggs/
 .eggs/
 lib/
+.idea/
+wandb/
+checkpoints*
+dataset_backups/
+pickle_dumps_valid_train/
 lib64/
 parts/
 sdist/
